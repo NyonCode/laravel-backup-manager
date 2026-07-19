@@ -1,0 +1,83 @@
+{
+    "name": "nyoncode/laravel-backup-manager",
+    "description": "Powerful and extensible backup manager for Laravel applications: databases, files, encryption, integrity manifests and multi-destination storage.",
+    "keywords": [
+        "laravel",
+        "backup",
+        "database",
+        "restore",
+        "encryption",
+        "s3",
+        "manifest"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "ext-json": "*",
+        "ext-openssl": "*",
+        "illuminate/bus": "^12.0|^13.0",
+        "illuminate/console": "^12.0|^13.0",
+        "illuminate/contracts": "^12.0|^13.0",
+        "illuminate/database": "^12.0|^13.0",
+        "illuminate/filesystem": "^12.0|^13.0",
+        "illuminate/queue": "^12.0|^13.0",
+        "illuminate/support": "^12.0|^13.0",
+        "nyoncode/laravel-package-toolkit": "^2.1.1",
+        "symfony/finder": "^7.0",
+        "symfony/process": "^7.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.29",
+        "league/flysystem-aws-s3-v3": "^3.0",
+        "mockery/mockery": "^1.6",
+        "orchestra/testbench": "^10.0",
+        "pestphp/pest": "^3.5",
+        "pestphp/pest-plugin-laravel": "^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Nyoncode\\BackupManager\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Nyoncode\\BackupManager\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "ondrejnyklicek",
+            "email": "ondrejnyklicek@icloud.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Nyoncode\\BackupManager\\BackupManagerServiceProvider"
+            ],
+            "aliases": {
+                "Backup": "Nyoncode\\BackupManager\\Facades\\Backup"
+            }
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "scripts": {
+        "test": "pest --testsuite Unit,Feature",
+        "test:all": "pest",
+        "test:unit": "pest --testsuite Unit",
+        "test:integration": "pest --testsuite Integration",
+        "test:coverage": "pest --coverage",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "format": "pint",
+        "lint": "pint --test"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
