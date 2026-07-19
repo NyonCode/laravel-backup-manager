@@ -83,6 +83,25 @@ it('restores only the database when asked', function (): void {
         ->and(DB::connection('bm_sqlite')->getSchemaBuilder()->hasTable('posts'))->toBeTrue();
 });
 
+it('refuses a manifest whose database dump path escapes the extract directory', function (): void {
+    DB::connection('bm_sqlite')->statement('CREATE TABLE t (id INTEGER PRIMARY KEY)');
+    app(BackupManager::class)->run();
+
+    // Tamper only the manifest: point the database dump at a host file outside
+    // the extract dir. The archive itself (and its checksum) is untouched, so the
+    // traversal guard — not the checksum — is what must stop the restore.
+    $disk = Storage::disk('local');
+    $manifestPath = collect($disk->files('backups'))->first(fn ($f) => str_ends_with($f, '.manifest.json'));
+    $manifest = json_decode($disk->get($manifestPath), true);
+    $manifest['databases'][0]['archived_path'] = '../../../../../../../../etc/passwd';
+    $disk->put($manifestPath, json_encode($manifest));
+
+    $backup = app(BackupRepository::class)->list('local', 'backups')[0];
+
+    // safe: false so the raw guard exception surfaces (no rollback wrapping).
+    app(RestoreManager::class)->restore($backup, RestoreOptions::databasesOnly(safe: false));
+})->throws(Exception::class, 'escapes the destination directory');
+
 it('rejects a tampered archive during verified restore', function (): void {
     DB::connection('bm_sqlite')->statement('CREATE TABLE t (id INTEGER PRIMARY KEY)');
     app(BackupManager::class)->run();

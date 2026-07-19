@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-07-20
+
+### Security
+
+- **Manifest signature is now enforced on restore.** When signing is enabled
+  (a `Signer` is bound), restore refuses any backup whose manifest signature is
+  missing or invalid instead of trusting the checksum alone — closing a gap where
+  a tampered manifest, or one with its signature stripped, could still be
+  restored. Environments without signing keep the checksum-only behaviour, so
+  unsigned backups still restore there; `--no-verify` remains the explicit
+  opt-out.
+- **Database dump path now goes through the traversal guard.** `RestoreManager`
+  resolves each manifest-declared database dump path with `Support\SafePath`, so
+  a hostile `archived_path` (`../../…`) can no longer make restore read and pipe
+  an arbitrary host file into the database client.
+- **`backup:upgrade` keeps the licence token off the process argv.** Credentials
+  are written straight into `auth.json` (merging any existing entries, mode
+  `0600`) rather than via `composer config --auth`, so the token is no longer
+  visible to other local users through `ps`/`/proc`.
+
+### Fixed
+
+- Corrected the Pro package name to `nyoncode/laravel-backup-manager-pro`
+  throughout config, the `backup:upgrade` command, runtime messages and docs so
+  activation targets the actually-published package.
+
 ## [1.1.0] - 2026-07-19
 
 ### Security
@@ -69,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`backup:upgrade` command.** Activate a Pro licence from the CLI: it
   configures the private Pro Composer repository and its credentials from the
-  token you pass, then installs `nyoncode/backup-manager-pro` (whose provider is
+  token you pass, then installs `nyoncode/laravel-backup-manager-pro` (whose provider is
   auto-discovered — no code change). `--dry-run` previews every step with the
   token masked; if anything fails, the exact manual commands are printed so the
   upgrade is never left half-done.
@@ -78,7 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Incremental backups are now a Pro feature.** The snapshot engine (blob pool,
   snapshot repository/codec, snapshot pipeline stages and reference-counted
-  retention) has moved to the `nyoncode/backup-manager-pro` package. The free
+  retention) has moved to the `nyoncode/laravel-backup-manager-pro` package. The free
   core keeps a single `SnapshotDriver` extension point and ships a null driver:
   it can still **read and list** snapshots (their manifests are plain JSON) but
   refuses to create, restore or verify one with a clear "requires Pro" message.
@@ -88,7 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Manifest signing (HMAC tamper-evidence) is now a Pro feature.** The core
   keeps the `Signer` contract, the manifest signature field and signature
   *verification*, but the `HmacSigner` implementation has moved to
-  `nyoncode/backup-manager-pro`. Checksum integrity (build + verify) is
+  `nyoncode/laravel-backup-manager-pro`. Checksum integrity (build + verify) is
   unchanged and remains in the free core. When signing is enabled without Pro
   installed, the core now **fails closed** — a backup aborts with a clear
   "signing requires Pro" error rather than silently producing an unsigned
@@ -97,7 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GFS retention and total-storage eviction are now Pro features.** The free
   core keeps the `simple` (keep-latest) strategy and the age cap
   (`max_age_days`); the Grandfather-Father-Son strategy and total-storage
-  eviction (`max_storage_megabytes`) have moved to `nyoncode/backup-manager-pro`.
+  eviction (`max_storage_megabytes`) have moved to `nyoncode/laravel-backup-manager-pro`.
   Strategies are now resolved by name from a `RetentionStrategyRegistry`, so
   selecting `gfs` without Pro **fails closed** — retention keeps every backup
   rather than prune under a policy it cannot honour — and a storage cap set
@@ -107,7 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Health monitoring, backup history and advanced notifications are now Pro
   features.** The free core keeps structured **logging** of every lifecycle
   event and **failure notifications by e-mail**. Moved to
-  `nyoncode/backup-manager-pro`: the `backup:monitor` command and health
+  `nyoncode/laravel-backup-manager-pro`: the `backup:monitor` command and health
   reporting (`MonitorManager`, `HealthReport`, the `BackupUnhealthy` event), the
   persisted **history** table (`BackupHistory` + its migration and listener),
   and the **Slack channel** plus **unhealthy-destination alerts**. Notifications

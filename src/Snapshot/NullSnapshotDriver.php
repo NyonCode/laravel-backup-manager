@@ -50,7 +50,7 @@ final class NullSnapshotDriver implements SnapshotDriver
     private static function unavailable(): BackupManagerException
     {
         return new BackupManagerException(
-            'Incremental backups require the nyoncode/backup-manager-pro package.',
+            'Incremental backups require the nyoncode/laravel-backup-manager-pro package.',
         );
     }
 }

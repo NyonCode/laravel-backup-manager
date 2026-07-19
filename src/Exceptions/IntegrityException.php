@@ -25,7 +25,7 @@ final class IntegrityException extends BackupManagerException
     {
         return new self(
             'Manifest signing is enabled but no signer is available. Signing is a '
-            .'Pro capability — install nyoncode/backup-manager-pro, or disable '
+            .'Pro capability — install nyoncode/laravel-backup-manager-pro, or disable '
             .'backup-manager.integrity.signing.enabled.'
         );
     }

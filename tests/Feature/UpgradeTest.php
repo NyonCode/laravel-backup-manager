@@ -21,7 +21,7 @@ it('previews the composer steps on a dry run, with the token masked', function (
         '--dry-run' => true,
     ])
         ->expectsOutputToContain('repositories.nyoncode')
-        ->expectsOutputToContain('composer require nyoncode/backup-manager-pro')
+        ->expectsOutputToContain('composer require nyoncode/laravel-backup-manager-pro')
         ->expectsOutputToContain('****1234')               // token masked on the auth line
         ->doesntExpectOutputToContain('SECRET-TOKEN-1234') // never printed raw
         ->assertExitCode(0);

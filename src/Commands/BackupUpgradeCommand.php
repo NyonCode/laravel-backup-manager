@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Nyoncode\BackupManager\Commands;
 
 use Illuminate\Console\Command;
+use Nyoncode\BackupManager\Support\ComposerAuthFile;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 /**
- * Activates a Pro licence and installs nyoncode/backup-manager-pro.
+ * Activates a Pro licence and installs nyoncode/laravel-backup-manager-pro.
  *
  * A free-core convenience: given a licence token it configures the private Pro
  * Composer repository and its credentials, then runs `composer require`. Pro's
@@ -51,14 +53,18 @@ final class BackupUpgradeCommand extends Command
         }
 
         $repository = $this->stringOption('repository') ?: (string) config('backup-manager.pro.repository');
-        $package = $this->stringOption('package') ?: (string) config('backup-manager.pro.package', 'nyoncode/backup-manager-pro');
+        $package = $this->stringOption('package') ?: (string) config('backup-manager.pro.package', 'nyoncode/laravel-backup-manager-pro');
         $username = $this->stringOption('username', 'token');
         $host = (string) (parse_url($repository, PHP_URL_HOST) ?: $repository);
 
         // Configure the private repo + credentials, then pull the package. The
         // repository is keyed `nyoncode` so one entry (and one licence key) serves
-        // every purchased NyonCode package on the host. Auth is written with
-        // `composer config --auth` (auth.json), never committed.
+        // every purchased NyonCode package on the host. The credentials are written
+        // straight into auth.json (never committed) rather than via
+        // `composer config --auth`, so the licence token never lands on the process
+        // argv where other local users could read it from `ps`/`/proc`. The steps
+        // below are the equivalent commands, shown for the dry run and the manual
+        // fallback with the token masked.
         $steps = [
             ['composer', 'config', 'repositories.nyoncode', 'composer', $repository],
             ['composer', 'config', '--auth', "http-basic.{$host}", $username, $token],
@@ -74,16 +80,25 @@ final class BackupUpgradeCommand extends Command
 
         $this->components->info(sprintf('Activating Pro (token …%s) from %s', substr($token, -4), $host));
 
-        foreach ($steps as $step) {
-            $this->line('<fg=gray>$ '.$this->render($step, $token).'</>');
+        // 1. Register the private repository (no secret on the command line).
+        if (! $this->runDisplayedStep($steps[0], $token)) {
+            return $this->manualFallback($steps, $token);
+        }
 
-            if (! $this->runStep($step)) {
-                $this->newLine();
-                $this->components->error('Upgrade did not complete. Finish it manually from '.base_path().':');
-                $this->printSteps($steps, $token);
+        // 2. Write the credentials into auth.json directly — off the argv.
+        $this->line('<fg=gray>$ '.$this->render($steps[1], $token).'</>');
 
-                return self::FAILURE;
-            }
+        try {
+            (new ComposerAuthFile(base_path().'/auth.json'))->putHttpBasic($host, $username, $token);
+        } catch (Throwable $exception) {
+            $this->components->error('Could not write auth.json: '.$exception->getMessage());
+
+            return $this->manualFallback($steps, $token);
+        }
+
+        // 3. Pull the package.
+        if (! $this->runDisplayedStep($steps[2], $token)) {
+            return $this->manualFallback($steps, $token);
         }
 
         $this->newLine();
@@ -104,6 +119,30 @@ final class BackupUpgradeCommand extends Command
         // Referenced as a string so the free core never depends on the Pro
         // symbol; class_exists just reports whether Pro is installed.
         return class_exists('Nyoncode\\BackupManagerPro\\BackupManagerProServiceProvider');
+    }
+
+    /**
+     * Echo a command (token masked) and run it.
+     *
+     * @param  list<string>  $command
+     */
+    private function runDisplayedStep(array $command, string $token): bool
+    {
+        $this->line('<fg=gray>$ '.$this->render($command, $token).'</>');
+
+        return $this->runStep($command);
+    }
+
+    /**
+     * @param  list<list<string>>  $steps
+     */
+    private function manualFallback(array $steps, string $token): int
+    {
+        $this->newLine();
+        $this->components->error('Upgrade did not complete. Finish it manually from '.base_path().':');
+        $this->printSteps($steps, $token);
+
+        return self::FAILURE;
     }
 
     /**

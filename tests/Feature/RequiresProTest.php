@@ -46,7 +46,7 @@ it('binds the null snapshot driver when Pro is absent', function (): void {
 
 it('refuses to create an incremental backup without Pro', function (): void {
     app(BackupManager::class)->run();
-})->throws(Exception::class, 'require the nyoncode/backup-manager-pro package');
+})->throws(Exception::class, 'require the nyoncode/laravel-backup-manager-pro package');
 
 it('treats snapshot retention as a safe no-op without Pro', function (): void {
     $result = app(SnapshotDriver::class)->applyRetention(

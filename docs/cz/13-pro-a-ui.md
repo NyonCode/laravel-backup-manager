@@ -41,7 +41,7 @@ php artisan backup:upgrade <licencni-klic>
 ```
 
 Nasměruje Composer na repozitář, uloží klíč jako HTTP-basic heslo a nainstaluje
-`nyoncode/backup-manager-pro`. Pro service provider pak přepíše null bindingy
+`nyoncode/laravel-backup-manager-pro`. Pro service provider pak přepíše null bindingy
 jádra reálným snapshot driverem, GFS strategií, signerem, monitorem a Slack
 kanálem — příkazy `backup:*` získají výše uvedené funkce při dalším běhu.
 
@@ -71,7 +71,7 @@ Nejdůležitější:
 Instalace po Pro (Pro i jádro si přitáhne automaticky):
 
 ```bash
-composer require nyoncode/backup-manager-ui
+composer require nyoncode/laravel-backup-manager-ui
 ```
 
 Připojí se na `/backup-manager`. Kompletní nastavení, konfiguraci a bezpečnostní

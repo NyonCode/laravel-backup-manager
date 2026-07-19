@@ -139,7 +139,7 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
         // Incremental backups are provided through the SnapshotDriver contract.
         // The free core binds a null driver that can still read and list
         // snapshots but refuses to create, restore or verify them; the Pro
-        // package (nyoncode/backup-manager-pro) overrides this binding with the
+        // package (nyoncode/laravel-backup-manager-pro) overrides this binding with the
         // real pool-backed driver and its snapshot pipeline stages.
         $this->app->singleton(SnapshotDriver::class, NullSnapshotDriver::class);
 

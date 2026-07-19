@@ -6,6 +6,7 @@ namespace Nyoncode\BackupManager\Managers;
 
 use Illuminate\Contracts\Config\Repository;
 use Nyoncode\BackupManager\Contracts\Archive\Archiver;
+use Nyoncode\BackupManager\Contracts\Integrity\Signer;
 use Nyoncode\BackupManager\Contracts\Snapshot\SnapshotDriver;
 use Nyoncode\BackupManager\Contracts\Storage\BackupRepository;
 use Nyoncode\BackupManager\DTOs\DatabaseTarget;
@@ -14,6 +15,7 @@ use Nyoncode\BackupManager\Exceptions\IntegrityException;
 use Nyoncode\BackupManager\Exceptions\RestoreException;
 use Nyoncode\BackupManager\Support\ArchivePath;
 use Nyoncode\BackupManager\Support\RestoreGuard;
+use Nyoncode\BackupManager\Support\SafePath;
 use Nyoncode\BackupManager\Support\Workspace;
 use Nyoncode\BackupManager\ValueObjects\DatabaseArtifact;
 use Nyoncode\BackupManager\ValueObjects\Manifest;
@@ -43,11 +45,13 @@ final class RestoreManager
         private readonly Archiver $archiver,
         private readonly RestoreGuard $guard,
         private readonly SnapshotDriver $snapshots,
+        private readonly ?Signer $signer = null,
     ) {}
 
     public function restore(StoredBackup $backup, RestoreOptions $options): RestoreResult
     {
         $manifest = $this->repository->readManifest($backup);
+        $this->assertAuthentic($manifest, $options);
         $workspace = Workspace::create($this->workingDirectory(), 'restore');
 
         try {
@@ -98,6 +102,28 @@ final class RestoreManager
             return new RestoreResult($backup->name, $restoredDatabases, $restoredFiles, $manifest);
         } finally {
             $workspace->delete();
+        }
+    }
+
+    /**
+     * Refuse to restore a backup we cannot prove is authentic.
+     *
+     * When this environment has signing configured (a Signer is bound) and the
+     * caller requested integrity checks, the manifest MUST carry a signature that
+     * verifies. A missing signature — e.g. one an attacker stripped to dodge the
+     * check — or an invalid one fails closed. Environments without signing keep
+     * the checksum-only behaviour, so unsigned backups still restore there.
+     */
+    private function assertAuthentic(Manifest $manifest, RestoreOptions $options): void
+    {
+        if (! $options->verifyChecksums || $this->signer === null) {
+            return;
+        }
+
+        $signature = $manifest->signature;
+
+        if ($signature === null || ! $this->signer->verify($manifest->withoutSignature()->toJson(), $signature)) {
+            throw IntegrityException::signatureMismatch();
         }
     }
 
@@ -153,7 +179,10 @@ final class RestoreManager
         $restored = [];
 
         foreach ($manifest->databases as $artifact) {
-            $dumpPath = rtrim($extractDir, '/').'/'.$artifact->archivedPath;
+            // The dump path comes from the manifest — untrusted data. Resolve it
+            // inside the extract dir so a hostile `archivedPath` (e.g. `../../etc`)
+            // cannot make us read and pipe an arbitrary host file into the client.
+            $dumpPath = SafePath::resolveWithin($extractDir, $artifact->archivedPath);
 
             if (! is_file($dumpPath)) {
                 throw RestoreException::failed("Missing database dump [{$artifact->archivedPath}] in archive.");

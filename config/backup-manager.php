@@ -153,7 +153,7 @@ return [
     |
     | Checksums are always computed for the archive and for every file recorded
     | in the manifest. Optional HMAC signing authenticates the manifest itself —
-    | signing is a Pro capability (nyoncode/backup-manager-pro); enabling it
+    | signing is a Pro capability (nyoncode/laravel-backup-manager-pro); enabling it
     | without Pro installed fails closed rather than storing an unsigned backup.
     |
     */
@@ -162,7 +162,7 @@ return [
         'checksum' => env('BACKUP_CHECKSUM', ChecksumAlgorithm::Sha256->value),
 
         'signing' => [
-            // Requires nyoncode/backup-manager-pro.
+            // Requires nyoncode/laravel-backup-manager-pro.
             'enabled' => (bool) env('BACKUP_SIGNING', false),
             // Defaults to the encryption key when null.
             'key' => env('BACKUP_SIGNING_KEY'),
@@ -178,7 +178,7 @@ return [
     | keep the newest N backups — plus an age cap. The GFS (Grandfather-Father-
     | Son) strategy, which keeps a tapering set of daily/weekly/monthly/yearly
     | backups, and total-storage eviction are Pro capabilities
-    | (nyoncode/backup-manager-pro). Selecting `gfs` without Pro installed prunes
+    | (nyoncode/laravel-backup-manager-pro). Selecting `gfs` without Pro installed prunes
     | nothing (fail-closed); a `max_storage_megabytes` cap without Pro is simply
     | not enforced. Limits that do apply are applied together.
     |
@@ -187,7 +187,7 @@ return [
     'retention' => [
         'strategy' => env('BACKUP_RETENTION', 'simple'), // 'simple' (core) | 'gfs' (Pro)
 
-        // Requires nyoncode/backup-manager-pro.
+        // Requires nyoncode/laravel-backup-manager-pro.
         'gfs' => [
             'keep_daily' => 7,
             'keep_weekly' => 4,
@@ -252,7 +252,7 @@ return [
 
     'pro' => [
         'repository' => env('BACKUP_PRO_REPOSITORY', 'https://nyoncode.cz/repo'),
-        'package' => 'nyoncode/backup-manager-pro',
+        'package' => 'nyoncode/laravel-backup-manager-pro',
     ],
 
     /*
@@ -262,7 +262,7 @@ return [
     |
     | The free core notifies on failures by e-mail. Health monitoring
     | (backup:monitor), the persisted history table, unhealthy-destination alerts
-    | and the Slack channel are Pro capabilities (nyoncode/backup-manager-pro);
+    | and the Slack channel are Pro capabilities (nyoncode/laravel-backup-manager-pro);
     | the keys for them stay here so the schema is shared, but without Pro they
     | are simply inert.
     |

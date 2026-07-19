@@ -41,7 +41,7 @@ php artisan backup:upgrade <licence-key>
 ```
 
 It points Composer at the repository, stores the key as the HTTP-basic password
-and requires `nyoncode/backup-manager-pro`. The Pro service provider then
+and requires `nyoncode/laravel-backup-manager-pro`. The Pro service provider then
 overrides the core's null bindings with the real snapshot driver, GFS strategy,
 signer, monitor and Slack channel — the `backup:*` commands gain the features
 above on the next run.
@@ -71,7 +71,7 @@ Highlights:
 Install it after Pro (it pulls Pro and the core in automatically):
 
 ```bash
-composer require nyoncode/backup-manager-ui
+composer require nyoncode/laravel-backup-manager-ui
 ```
 
 It mounts at `/backup-manager`. The **Backup Manager UI** package documents the
