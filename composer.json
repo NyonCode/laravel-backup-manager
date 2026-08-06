@@ -24,8 +24,8 @@
         "illuminate/queue": "^12.0|^13.0",
         "illuminate/support": "^12.0|^13.0",
         "nyoncode/laravel-package-toolkit": "^2.1.1",
-        "symfony/finder": "^7.0",
-        "symfony/process": "^7.0"
+        "symfony/finder": "^7.0|^8.0",
+        "symfony/process": "^7.0|^8.0"
     },
     "require-dev": {
         "larastan/larastan": "^3.0",
