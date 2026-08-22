@@ -9,13 +9,21 @@ PostgreSQL and SQLite work out of the box, and you can teach it new engines (see
 
 | Driver | Config value | Dump tool | Restore tool |
 |--------|--------------|-----------|--------------|
-| MySQL | `mysql` | `mysqldump` | `mysql` |
-| MariaDB | `mariadb` | `mysqldump` | `mysql` |
+| MySQL | `mysql` | `mysqldump`, else `mariadb-dump` | `mysql`, else `mariadb` |
+| MariaDB | `mariadb` | `mariadb-dump`, else `mysqldump` | `mariadb`, else `mysql` |
 | PostgreSQL | `pgsql` | `pg_dump` | `psql` |
 | SQLite | `sqlite` | file copy | file copy |
 
 The driver is taken directly from your Laravel connection config, so no extra
 mapping is needed.
+
+MariaDB 11 renamed its command line clients — `mysqldump` became `mariadb-dump`,
+`mysql` became `mariadb` — and the old names now survive only as deprecated
+symlinks that some distributions and container images no longer ship. Both
+spellings are tried, preferring the one that matches the server being backed up,
+so a MariaDB host works whichever clients it has. Where both are installed the
+matching client wins, because MySQL's `mysqldump` can emit SQL a MariaDB server
+will not read back.
 
 ## Choosing connections
 

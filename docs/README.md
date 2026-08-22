@@ -21,6 +21,7 @@ are your reference.
 12. [CLI reference](11-cli.md)
 13. [Extending the package](12-extending.md)
 14. [Pro & the UI dashboard](13-pro-and-ui.md)
+15. [AI assistants (MCP)](14-mcp.md)
 
 > **Open-core.** This package is the free MIT core. Incremental backups, GFS
 > retention, HMAC signing, monitoring and the web dashboard are commercial

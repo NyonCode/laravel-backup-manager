@@ -10,6 +10,7 @@ use Nyoncode\BackupManager\Contracts\Storage\BackupRepository;
 use Nyoncode\BackupManager\DTOs\RestoreOptions;
 use Nyoncode\BackupManager\Managers\BackupManager;
 use Nyoncode\BackupManager\Managers\RestoreManager;
+use Nyoncode\BackupManager\Mcp\Server as McpServer;
 use Nyoncode\BackupManager\Tests\Integration\DatabaseTestKit;
 use Nyoncode\BackupManager\Tests\TestCase;
 
@@ -102,4 +103,60 @@ function assertDatabaseRoundtrip(array $connection, array $options): void
     // Clean up the test tables.
     $schema->dropIfExists('bm_logs');
     $schema->dropIfExists('bm_users');
+}
+
+/**
+ * Send one JSON-RPC message to the MCP server and return the decoded reply.
+ *
+ * Pass $id = null for a notification, which the server answers with nothing.
+ *
+ * @param  array<string, mixed>  $params
+ * @return array<string, mixed>|null
+ */
+function mcpRequest(string $method, array $params = [], int|string|null $id = 1): ?array
+{
+    $message = ['jsonrpc' => '2.0', 'method' => $method];
+
+    if ($id !== null) {
+        $message['id'] = $id;
+    }
+
+    if ($params !== []) {
+        $message['params'] = $params;
+    }
+
+    $reply = app(McpServer::class)->handle((string) json_encode($message));
+
+    return $reply === null ? null : (array) json_decode($reply, true);
+}
+
+/**
+ * Call one MCP tool and return its result envelope.
+ *
+ * @param  array<string, mixed>  $arguments
+ * @return array<string, mixed>
+ */
+function mcpTool(string $name, array $arguments = []): array
+{
+    $reply = mcpRequest('tools/call', ['name' => $name, 'arguments' => (object) $arguments]);
+
+    if (! isset($reply['result'])) {
+        throw new RuntimeException("The MCP server rejected the [{$name}] call: ".json_encode($reply));
+    }
+
+    /** @var array<string, mixed> $result */
+    $result = $reply['result'];
+
+    return $result;
+}
+
+/**
+ * The structured payload of a tool result.
+ *
+ * @param  array<string, mixed>  $arguments
+ * @return array<string, mixed>
+ */
+function mcpData(string $name, array $arguments = []): array
+{
+    return (array) mcpTool($name, $arguments)['structuredContent'];
 }

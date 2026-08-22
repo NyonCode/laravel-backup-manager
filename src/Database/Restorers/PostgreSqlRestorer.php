@@ -25,7 +25,7 @@ final class PostgreSqlRestorer implements DatabaseRestorer
 
     public function restore(DatabaseTarget $target, string $dumpPath): void
     {
-        $binary = $this->binaries->locate('psql');
+        $binary = $this->binaries->locateFirst($target->driver->clientBinaries());
         $environment = $target->password !== null ? ['PGPASSWORD' => $target->password] : [];
 
         $command = [$binary, '--set', 'ON_ERROR_STOP=on'];

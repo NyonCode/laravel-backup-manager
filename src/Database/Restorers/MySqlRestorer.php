@@ -12,7 +12,8 @@ use Nyoncode\BackupManager\Support\BinaryLocator;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
 /**
- * Restores MySQL/MariaDB databases by piping an SQL dump into the `mysql` client.
+ * Restores MySQL/MariaDB databases by piping an SQL dump into the server's own
+ * client — `mysql`, or MariaDB's `mariadb`.
  */
 final class MySqlRestorer implements DatabaseRestorer
 {
@@ -25,7 +26,7 @@ final class MySqlRestorer implements DatabaseRestorer
 
     public function restore(DatabaseTarget $target, string $dumpPath): void
     {
-        $binary = $this->binaries->locate('mysql');
+        $binary = $this->binaries->locateFirst($target->driver->clientBinaries());
         $environment = $target->password !== null ? ['MYSQL_PWD' => $target->password] : [];
 
         $command = [$binary];

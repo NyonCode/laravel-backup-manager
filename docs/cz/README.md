@@ -20,6 +20,7 @@ záloze přibližně za deset minut. Poté vám stránky níže poslouží jako 
 12. [Přehled CLI](11-cli.md)
 13. [Rozšíření balíčku](12-rozsireni.md)
 14. [Pro a UI dashboard](13-pro-a-ui.md)
+15. [AI asistenti (MCP)](14-mcp.md)
 
 > **Open-core.** Tento balíček je free MIT jádro. Inkrementální zálohy, GFS
 > retence, HMAC podpis, monitoring a webový dashboard jsou komerční doplňky —

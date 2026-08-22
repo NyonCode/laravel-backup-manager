@@ -9,13 +9,21 @@ PostgreSQL a SQLite fungují rovnou, a další enginy můžete doplnit (viz
 
 | Ovladač | Hodnota v configu | Nástroj pro zálohu | Nástroj pro obnovu |
 |---------|-------------------|--------------------|--------------------|
-| MySQL | `mysql` | `mysqldump` | `mysql` |
-| MariaDB | `mariadb` | `mysqldump` | `mysql` |
+| MySQL | `mysql` | `mysqldump`, jinak `mariadb-dump` | `mysql`, jinak `mariadb` |
+| MariaDB | `mariadb` | `mariadb-dump`, jinak `mysqldump` | `mariadb`, jinak `mysql` |
 | PostgreSQL | `pgsql` | `pg_dump` | `psql` |
 | SQLite | `sqlite` | kopie souboru | kopie souboru |
 
 Ovladač se přebírá přímo z konfigurace Laravel připojení, žádné další mapování
 není potřeba.
+
+MariaDB 11 přejmenovala své klienty — z `mysqldump` se stal `mariadb-dump`,
+z `mysql` pak `mariadb` — a stará jména dnes přežívají jen jako deprecated
+symlinky, které část distribucí a kontejnerů už nedodává. Zkoušejí se obě
+podoby, přednost má ta odpovídající zálohovanému serveru, takže MariaDB host
+funguje s libovolnou sadou klientů. Jsou-li nainstalované obě, vyhrává
+odpovídající klient — `mysqldump` z MySQL umí vyprodukovat SQL, které MariaDB
+server nemusí načíst zpět.
 
 ## Výběr připojení
 

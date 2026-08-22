@@ -8,6 +8,7 @@ use Closure;
 use Nyoncode\BackupManager\Contracts\Backup\BackupStage;
 use Nyoncode\BackupManager\Contracts\Integrity\Signer;
 use Nyoncode\BackupManager\Support\BackupContext;
+use Nyoncode\BackupManager\Support\MigrationProbe;
 use Nyoncode\BackupManager\ValueObjects\Checksum;
 use Nyoncode\BackupManager\ValueObjects\Manifest;
 
@@ -21,6 +22,7 @@ use Nyoncode\BackupManager\ValueObjects\Manifest;
 final class BuildManifest implements BackupStage
 {
     public function __construct(
+        private readonly MigrationProbe $migrations,
         private readonly ?Signer $signer = null,
     ) {}
 
@@ -38,6 +40,7 @@ final class BuildManifest implements BackupStage
             archiveSize: (int) (filesize($context->archivePath) ?: 0),
             archiveChecksum: Checksum::forFile($context->archivePath, $context->checksum),
             config: $this->configSnapshot($context),
+            migrations: $this->migrations->capture(),
         );
 
         if ($this->signer !== null) {

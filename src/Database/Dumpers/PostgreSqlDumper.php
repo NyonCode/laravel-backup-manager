@@ -27,7 +27,7 @@ final class PostgreSqlDumper implements DatabaseDumper
 
     public function dump(DatabaseTarget $target, string $outputPath): void
     {
-        $binary = $this->binaries->locate('pg_dump');
+        $binary = $this->binaries->locateFirst($target->driver->dumpBinaries());
         $environment = $target->password !== null ? ['PGPASSWORD' => $target->password] : [];
 
         try {

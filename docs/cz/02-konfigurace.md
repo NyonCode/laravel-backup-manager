@@ -168,3 +168,19 @@ Ponechte `null` pro automatické vyhledání v `PATH`, nebo zadejte absolutní c
 
 Pracovní adresář musí mít dost volného místa pro největší zálohu během jejího
 sestavení, komprese a šifrování před nahráním.
+
+## AI asistenti (MCP)
+
+```php
+'mcp' => [
+    'enabled' => (bool) env('BACKUP_MCP', true),
+    'allow_writes' => (bool) env('BACKUP_MCP_ALLOW_WRITES', true),
+    'allow_destructive' => (bool) env('BACKUP_MCP_ALLOW_DESTRUCTIVE', false),
+    'environments' => ['local'],   // ['*'] povolí všechna prostředí
+],
+```
+
+Co smí asistent přes `php artisan backup:mcp`. Čtení a spouštění záloh je
+povolené vždy, zápis konfigurace je ve výchozím stavu zapnutý, **mazání záloh je
+vypnuté**, dokud ho nepovolíte, a obnova se nenabízí vůbec. Mimo uvedená
+prostředí server odmítne naběhnout. Viz [AI asistenti (MCP)](14-mcp.md).

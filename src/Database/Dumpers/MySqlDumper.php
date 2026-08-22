@@ -12,7 +12,9 @@ use Nyoncode\BackupManager\Support\BinaryLocator;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
 /**
- * Dumps MySQL and MariaDB databases via the `mysqldump` binary.
+ * Dumps MySQL and MariaDB databases via whichever client the host provides —
+ * `mysqldump` or MariaDB's `mariadb-dump`, preferring the one that matches the
+ * server being backed up.
  *
  * The password is passed through the environment (MYSQL_PWD) rather than the
  * command line so it never appears in the host's process list.
@@ -28,7 +30,9 @@ final class MySqlDumper implements DatabaseDumper
 
     public function dump(DatabaseTarget $target, string $outputPath): void
     {
-        $binary = $this->binaries->locate('mysqldump');
+        // Named by the driver, not hardcoded: MariaDB 11+ ships `mariadb-dump`
+        // and no longer guarantees the `mysqldump` symlink.
+        $binary = $this->binaries->locateFirst($target->driver->dumpBinaries());
         $environment = $target->password !== null ? ['MYSQL_PWD' => $target->password] : [];
 
         $ignored = [...$target->excludeTables, ...$target->schemaOnlyTables];

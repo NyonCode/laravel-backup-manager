@@ -19,10 +19,17 @@ final class DatabaseDumpException extends BackupManagerException
         );
     }
 
-    public static function binaryNotFound(string $binary): self
+    /**
+     * @param  string  ...$binaries  Every name that was tried, best first.
+     */
+    public static function binaryNotFound(string ...$binaries): self
     {
+        // Naming every candidate matters for MySQL/MariaDB, where the same tool
+        // ships under two names and the reader needs to know both were missing.
+        $names = implode('] or [', $binaries);
+
         return new self(
-            "The [{$binary}] binary could not be found. Make sure it is installed and available in your PATH, "
+            "The [{$names}] binary could not be found. Make sure it is installed and available in your PATH, "
             .'or configure its path via the backup-manager config.'
         );
     }

@@ -168,3 +168,20 @@ Leave `null` to auto-discover from `PATH`, or set absolute paths:
 
 The working directory must have enough free space for the largest backup while it
 is assembled, compressed and encrypted before upload.
+
+## AI assistants (MCP)
+
+```php
+'mcp' => [
+    'enabled' => (bool) env('BACKUP_MCP', true),
+    'allow_writes' => (bool) env('BACKUP_MCP_ALLOW_WRITES', true),
+    'allow_destructive' => (bool) env('BACKUP_MCP_ALLOW_DESTRUCTIVE', false),
+    'environments' => ['local'],   // ['*'] allows every environment
+],
+```
+
+What `php artisan backup:mcp` lets an assistant do. Reading and running backups
+is always allowed; writing configuration is on by default; **deleting backups is
+off** until you enable it, and restore is never exposed. Outside the listed
+environments the server refuses to start. See
+[AI assistants (MCP)](14-mcp.md).

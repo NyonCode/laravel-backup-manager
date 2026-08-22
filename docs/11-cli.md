@@ -78,6 +78,24 @@ php artisan backup:monitor
 php artisan backup:monitor --profile=nightly
 ```
 
+## `backup:mcp`
+
+Serve the Model Context Protocol server on stdin/stdout, so an AI assistant can
+inspect, configure, run and verify backups. See
+[AI assistants (MCP)](14-mcp.md).
+
+```bash
+php artisan backup:mcp
+php artisan backup:mcp --read-only
+```
+
+| Option | Description |
+|--------|-------------|
+| `--allow-writes` | Allow configuration writes for this session |
+| `--deny-writes` | Forbid configuration writes for this session |
+| `--allow-destructive` | Allow deleting backups for this session |
+| `--read-only` | Expose only tools that change nothing |
+
 ## Exit codes
 
 | Code | Meaning |

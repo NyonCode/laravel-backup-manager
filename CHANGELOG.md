@@ -5,7 +5,101 @@ All notable changes to `nyoncode/laravel-backup-manager` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-08-22
+
+### Fixed
+
+- **MariaDB hosts without the legacy `mysql*` symlinks could not be backed up.**
+  Both the dumper and the restorer asked for `mysqldump` / `mysql` by name,
+  while MariaDB 11 renamed its clients to `mariadb-dump` / `mariadb` and left
+  the old names as deprecated symlinks that several distributions and container
+  images no longer ship — so a backup failed with "The [mysqldump] binary could
+  not be found", despite MariaDB being a documented driver. Each connection now
+  asks for the clients its own driver names, best first, so either spelling
+  works; where both are installed the one matching the server wins, since
+  MySQL's `mysqldump` can emit SQL a MariaDB server will not read back.
+  `mariadb-dump` and `mariadb` are configurable like the other binaries
+  (`BACKUP_MARIADB_DUMP_PATH`, `BACKUP_MARIADB_PATH`).
+
+### Added
+
+- **An MCP server, so an AI assistant can set backups up for you**
+  (`php artisan backup:mcp`). It speaks the Model Context Protocol over
+  stdin/stdout with no extra dependency, and exposes twelve tools: a setup
+  guide, an overview of the installation, the environment (disks, connections,
+  binaries, free space), the resolved profiles, the full configuration
+  reference, a validator, the stored backups, a retention preview, and the
+  operations themselves — configure, run, verify, prune. The point is that an
+  assistant reads *this* installation before it proposes anything, instead of
+  inventing a disk name or a config key that sounds plausible.
+
+  Writing is bounded on every side. `backup_configure` accepts only keys the
+  reference documents, with values of the declared type; it defaults to a dry
+  run that returns both the exact edits and the findings the result *would*
+  have, and refuses to apply a change that would leave errors behind unless
+  explicitly forced. A setting the config file reads through `env()` is written
+  to `.env` rather than baked in as a literal, secrets are written but never
+  echoed back, the config file is edited by token so its comments survive, the
+  edited source is re-parsed before it is written, the previous file is copied
+  aside, and the write itself is atomic.
+
+  Permissions are per access level, not per tool name, so a tool an add-on
+  contributes is governed by the same rules: reading and running backups is
+  always allowed, configuration writes are on by default,
+  **deleting backups is off** until `BACKUP_MCP_ALLOW_DESTRUCTIVE=true`, and the
+  server refuses to start outside `mcp.environments` (`local` by default).
+  Restore is not exposed over MCP at all — it overwrites a live application, so
+  it stays a deliberate human act. See [docs/14-mcp.md](docs/14-mcp.md).
+
+- **`ConfigValidator` — a standing check on the configuration**, reachable from
+  the MCP server and usable on its own. It reports what would fail (a
+  destination disk that does not exist, a missing dump binary, encryption
+  enabled without a key, a capability that needs Pro) *and* what would quietly
+  protect nothing: no off-site destination, no schedule, nobody on the failure
+  mail, a `keep_latest` below 1 that would delete every backup it finds. Each
+  finding names the key and the fix.
+
+- **Configuration writing primitives** used by the MCP server and available to
+  anything else that needs them: `ConfigReference` (the package's own
+  configuration described as data), `EnvFile` (comment-preserving `.env`
+  upserts), `PhpConfigFile` (token-level edits to a published config file),
+  `ConfigWriter` (routes each key to the right file), `BackupFinder` and
+  `Edition`.
+
+- **The manifest records which migrations had run** (`migrations.ran`, manifest
+  schema 1.2). A database dump only fits a codebase whose schema expectations
+  match it, and the app version does not establish that — two commits can share
+  a version string and differ by a migration. The dump has always contained the
+  `migrations` table, but only after decrypting and unpacking it; the same fact
+  now sits in the sidecar, so a backup can be checked against a codebase, and two
+  backups diffed against each other, without touching the archive. `MigrationState`
+  exposes `latest()`, `count()`, `ahead()` and `matches()`. Reading is fail-soft:
+  no database, an unreachable one or one that never migrated records null rather
+  than failing the backup, and manifests written before 1.2 read back as null —
+  "not recorded", not "none had run".
+
+- **`DeleteManager` — targeted deletion of named backups.** Retention prunes on
+  a policy; this removes exactly what the caller names, for a corrupted archive
+  or a run kept by mistake. Guarded rather than trusted: it refuses outright if
+  the deletion would leave the destination with no backup at all, and every name
+  is resolved before anything is removed, so an unknown one aborts the whole
+  call instead of deleting half a selection. Deleting an incremental snapshot
+  removes only its manifest — its blocks stay in the shared pool until a
+  retention run garbage-collects them, because other snapshots may still
+  reference them. Supports a dry run.
+- **`BackupDeleted` event.** Dispatched per deleted backup, carrying an optional
+  actor so a listener can record who removed what. Retention stays silent; only
+  a targeted deletion fires it.
+- The package now contributes a **Backup Manager** section to `php artisan
+  about`, reporting the default profile, encryption, manifest signing, whether
+  the incremental (Pro) engine is active, and scheduling.
+
+## [1.1.2] - 2026-08-06
+
+### Changed
+
+- Widened the `symfony/finder` and `symfony/process` constraints to
+  `^7.0|^8.0`, so the package installs alongside Symfony 8.
 
 ## [1.1.1] - 2026-07-20
 
@@ -211,6 +305,9 @@ Initial release.
   Laravel Pint. CI across PHP 8.3 / 8.4, Laravel 12 / 13, Windows, and MySQL /
   MariaDB / PostgreSQL / MinIO service containers.
 
-[Unreleased]: https://github.com/nyoncode/laravel-backup-manager/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/nyoncode/laravel-backup-manager/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/nyoncode/laravel-backup-manager/compare/v1.1.2...v1.2.0
+[1.1.2]: https://github.com/nyoncode/laravel-backup-manager/compare/v1.1.1...v1.1.2
+[1.1.1]: https://github.com/nyoncode/laravel-backup-manager/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/nyoncode/laravel-backup-manager/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/nyoncode/laravel-backup-manager/releases/tag/v1.0.0

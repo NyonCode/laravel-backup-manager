@@ -257,6 +257,36 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | MCP server (AI assistants)
+    |--------------------------------------------------------------------------
+    |
+    | `php artisan backup:mcp` serves a Model Context Protocol server, so an AI
+    | assistant can inspect this installation, propose and write a backup
+    | configuration, then run and verify a backup to prove it works.
+    |
+    | The defaults are deliberately timid. Reading and running backups is always
+    | allowed; writing configuration is allowed only in the environments listed
+    | below; deleting backups is off entirely until you turn it on. Restoring is
+    | never exposed over MCP — it overwrites a live application, so it stays a
+    | deliberate human act.
+    |
+    */
+
+    'mcp' => [
+        'enabled' => (bool) env('BACKUP_MCP', true),
+
+        // Let an assistant edit .env and config/backup-manager.php.
+        'allow_writes' => (bool) env('BACKUP_MCP_ALLOW_WRITES', true),
+
+        // Let an assistant delete backups (retention pruning). Off by default.
+        'allow_destructive' => (bool) env('BACKUP_MCP_ALLOW_DESTRUCTIVE', false),
+
+        // Environments the server may run in at all. ['*'] allows every one.
+        'environments' => ['local'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Monitoring & notifications
     |--------------------------------------------------------------------------
     |
@@ -307,6 +337,13 @@ return [
     'binaries' => [
         'mysqldump' => env('BACKUP_MYSQLDUMP_PATH'),
         'mysql' => env('BACKUP_MYSQL_PATH'),
+
+        // MariaDB 11+ renamed its clients and no longer guarantees the old
+        // `mysql*` symlinks. A MariaDB connection prefers these and falls back
+        // to the MySQL names, so on most hosts neither needs setting.
+        'mariadb-dump' => env('BACKUP_MARIADB_DUMP_PATH'),
+        'mariadb' => env('BACKUP_MARIADB_PATH'),
+
         'pg_dump' => env('BACKUP_PGDUMP_PATH'),
         'psql' => env('BACKUP_PSQL_PATH'),
         'gzip' => env('BACKUP_GZIP_PATH'),

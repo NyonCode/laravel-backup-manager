@@ -38,6 +38,30 @@ final class BinaryLocator
     }
 
     /**
+     * Locate the first of several interchangeable binaries.
+     *
+     * Candidates are tried in order, so the caller expresses a preference
+     * rather than a requirement — a driver whose tool has been renamed can name
+     * both spellings and still get the right one on either host.
+     *
+     * @param  list<string>  $candidates  Binary names, best first.
+     *
+     * @throws DatabaseDumpException When none of them is available.
+     */
+    public function locateFirst(array $candidates): string
+    {
+        foreach ($candidates as $binary) {
+            $path = $this->resolved[$binary] ?? $this->resolve($binary);
+
+            if ($path !== null) {
+                return $this->resolved[$binary] = $path;
+            }
+        }
+
+        throw DatabaseDumpException::binaryNotFound(...$candidates);
+    }
+
+    /**
      * Determine whether a binary is available without throwing.
      */
     public function has(string $binary): bool

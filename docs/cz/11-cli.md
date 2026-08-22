@@ -77,6 +77,24 @@ php artisan backup:monitor
 php artisan backup:monitor --profile=nightly
 ```
 
+## `backup:mcp`
+
+Spustí server Model Context Protocolu na stdin/stdout, takže AI asistent může
+zálohy prozkoumat, nastavit, spustit a ověřit. Viz
+[AI asistenti (MCP)](14-mcp.md).
+
+```bash
+php artisan backup:mcp
+php artisan backup:mcp --read-only
+```
+
+| Volba | Popis |
+|-------|-------|
+| `--allow-writes` | Povolit zápis konfigurace pro toto sezení |
+| `--deny-writes` | Zakázat zápis konfigurace pro toto sezení |
+| `--allow-destructive` | Povolit mazání záloh pro toto sezení |
+| `--read-only` | Nabídnout jen nástroje, které nic nemění |
+
 ## Návratové kódy
 
 | Kód | Význam |

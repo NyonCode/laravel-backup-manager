@@ -6,6 +6,7 @@ namespace Nyoncode\BackupManager;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Pipeline\Pipeline;
@@ -21,12 +22,14 @@ use Nyoncode\BackupManager\Actions\Backup\StoreBackup;
 use Nyoncode\BackupManager\Archive\PosixTarArchiver;
 use Nyoncode\BackupManager\Commands\BackupCleanCommand;
 use Nyoncode\BackupManager\Commands\BackupListCommand;
+use Nyoncode\BackupManager\Commands\BackupMcpCommand;
 use Nyoncode\BackupManager\Commands\BackupRestoreCommand;
 use Nyoncode\BackupManager\Commands\BackupRunCommand;
 use Nyoncode\BackupManager\Commands\BackupUpgradeCommand;
 use Nyoncode\BackupManager\Commands\BackupVerifyCommand;
 use Nyoncode\BackupManager\Contracts\Archive\Archiver;
 use Nyoncode\BackupManager\Contracts\Integrity\Signer;
+use Nyoncode\BackupManager\Contracts\Mcp\McpTool;
 use Nyoncode\BackupManager\Contracts\Notification\NotificationChannel;
 use Nyoncode\BackupManager\Contracts\Snapshot\SnapshotDriver;
 use Nyoncode\BackupManager\Contracts\Storage\BackupRepository;
@@ -38,13 +41,35 @@ use Nyoncode\BackupManager\Managers\BackupManager;
 use Nyoncode\BackupManager\Managers\CompressorManager;
 use Nyoncode\BackupManager\Managers\DatabaseManager;
 use Nyoncode\BackupManager\Managers\EncryptorManager;
+use Nyoncode\BackupManager\Managers\RetentionManager;
+use Nyoncode\BackupManager\Mcp\AccessPolicy;
+use Nyoncode\BackupManager\Mcp\McpPrompt;
+use Nyoncode\BackupManager\Mcp\McpResource;
+use Nyoncode\BackupManager\Mcp\Server as McpServer;
+use Nyoncode\BackupManager\Mcp\Support\SetupGuide;
+use Nyoncode\BackupManager\Mcp\Tools\ConfigReferenceTool;
+use Nyoncode\BackupManager\Mcp\Tools\ConfigureTool;
+use Nyoncode\BackupManager\Mcp\Tools\InspectEnvironmentTool;
+use Nyoncode\BackupManager\Mcp\Tools\ListBackupsTool;
+use Nyoncode\BackupManager\Mcp\Tools\ListProfilesTool;
+use Nyoncode\BackupManager\Mcp\Tools\OverviewTool;
+use Nyoncode\BackupManager\Mcp\Tools\RetentionTool;
+use Nyoncode\BackupManager\Mcp\Tools\RunBackupTool;
+use Nyoncode\BackupManager\Mcp\Tools\SetupGuideTool;
+use Nyoncode\BackupManager\Mcp\Tools\ValidateConfigurationTool;
+use Nyoncode\BackupManager\Mcp\Tools\VerifyBackupTool;
 use Nyoncode\BackupManager\Notifications\MailChannel;
 use Nyoncode\BackupManager\Retention\SimpleStrategy;
 use Nyoncode\BackupManager\Services\BackupNotifier;
 use Nyoncode\BackupManager\Snapshot\NullSnapshotDriver;
 use Nyoncode\BackupManager\Storage\DiskBackupRepository;
 use Nyoncode\BackupManager\Support\BinaryLocator;
+use Nyoncode\BackupManager\Support\ConfigReference;
+use Nyoncode\BackupManager\Support\ConfigValidator;
+use Nyoncode\BackupManager\Support\ConfigWriter;
+use Nyoncode\BackupManager\Support\EnvFile;
 use Nyoncode\BackupManager\Support\EnvironmentProbe;
+use Nyoncode\BackupManager\Support\PhpConfigFile;
 use Nyoncode\BackupManager\Support\ProfileResolver;
 use Nyoncode\BackupManager\Support\RetentionSelector;
 use Nyoncode\BackupManager\Support\RetentionStrategyRegistry;
@@ -60,40 +85,71 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
      */
     public const NOTIFICATION_CHANNELS = 'backup-manager.notification-channels';
 
+    /**
+     * Container tag collecting the tools the MCP server exposes. An add-on
+     * registers a tool by tagging an implementation of the McpTool contract
+     * onto this name; the server picks it up without knowing about it.
+     */
+    public const MCP_TOOLS = 'backup-manager.mcp-tools';
+
+    /**
+     * Aliases for the two registrations of the retention tool: the same class
+     * serves a read-only preview and the destructive apply.
+     */
+    private const RETENTION_PREVIEW = 'backup-manager.mcp.retention-preview';
+
+    private const RETENTION_APPLY = 'backup-manager.mcp.retention-apply';
+
     public function configure(Packager $packager): void
     {
         $packager
             ->name('Backup Manager')
             ->hasShortName('backup-manager')
-            ->hasConfig();
+            ->hasConfig()
+            ->hasAbout()
+            // Wire the container after the package is registered — the toolkit
+            // fires this once config has been merged, so bindings can safely
+            // read configuration without overriding register() itself.
+            ->registeredPackage(function (): void {
+                $this->registerServices();
+                $this->registerManagers();
+                $this->registerBackupManager();
+                $this->registerMcpServer();
+            })
+            // Subscribe the activity/notification listeners and register the
+            // schedule once the package has fully booted.
+            ->bootedPackage(function (): void {
+                $events = $this->app->make(Dispatcher::class);
+                $events->subscribe(LogsBackupActivity::class);
+                $events->subscribe(SendBackupNotifications::class);
+
+                $this->registerSchedule();
+            });
     }
 
     /**
-     * Bind the package's services once the package has been registered.
+     * Rows added to this package's section of `php artisan about`.
      *
-     * Using the toolkit's `registeredPackage` lifecycle hook keeps the
-     * container wiring in the register phase without overriding register()
-     * itself, and runs after the package config has been merged so bindings
-     * can safely read configuration.
+     * Every value is a closure so it is evaluated lazily when the command runs
+     * (never at boot) and reflects the live container: the snapshot row reports
+     * whether the Pro engine has overridden the core's null driver.
+     *
+     * @return array<string, \Closure>
      */
-    public function registeredPackage(): void
+    public function aboutData(): array
     {
-        parent::registeredPackage();
-
-        $this->registerServices();
-        $this->registerManagers();
-        $this->registerBackupManager();
-    }
-
-    public function bootedPackage(): void
-    {
-        parent::bootedPackage();
-
-        $events = $this->app->make(Dispatcher::class);
-        $events->subscribe(LogsBackupActivity::class);
-        $events->subscribe(SendBackupNotifications::class);
-
-        $this->registerSchedule();
+        return [
+            'Default profile' => fn (): string => (string) config('backup-manager.default', 'default'),
+            'Encryption' => fn (): string => config('backup-manager.encryption.key') ? 'enabled' : 'disabled',
+            'Manifest signing' => fn (): string => config('backup-manager.integrity.signing.enabled') ? 'enabled' : 'disabled',
+            'Incremental snapshots' => fn (): string => $this->app->make(SnapshotDriver::class) instanceof NullSnapshotDriver
+                ? 'core (read-only)'
+                : 'pro',
+            'Scheduling' => fn (): string => config('backup-manager.schedule.enabled') ? 'enabled' : 'disabled',
+            'MCP server' => fn (): string => config('backup-manager.mcp.enabled')
+                ? 'backup:mcp'.(config('backup-manager.mcp.allow_writes') ? ' (writes allowed)' : ' (read-only)')
+                : 'disabled',
+        ];
     }
 
     /**
@@ -108,6 +164,7 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
             BackupCleanCommand::class,
             BackupVerifyCommand::class,
             BackupUpgradeCommand::class,
+            BackupMcpCommand::class,
         ];
     }
 
@@ -249,6 +306,189 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
                 snapshots: $app->make(SnapshotDriver::class),
             );
         });
+    }
+
+    /**
+     * Wire the Model Context Protocol server.
+     *
+     * The tools are collected through a container tag, so the Pro package — or
+     * an application — can contribute one without this provider knowing about
+     * it. Nothing here is resolved until `backup:mcp` runs, so an installation
+     * that never talks to an assistant pays nothing for the feature.
+     */
+    private function registerMcpServer(): void
+    {
+        $this->app->singleton(ConfigReference::class);
+        $this->app->singleton(SetupGuide::class);
+
+        $this->app->singleton(ConfigValidator::class, fn ($app): ConfigValidator => new ConfigValidator(
+            $app->make(BinaryLocator::class),
+            $app->make(SnapshotDriver::class),
+            config_path('backup-manager.php'),
+            base_path('.env'),
+        ));
+
+        $this->app->singleton(ConfigWriter::class, fn ($app): ConfigWriter => new ConfigWriter(
+            $app->make(ConfigReference::class),
+            new PhpConfigFile(config_path('backup-manager.php')),
+            new EnvFile(base_path('.env')),
+            dirname(__DIR__).'/config/backup-manager.php',
+            storage_path('app/backup-manager/config-backups'),
+        ));
+
+        $this->app->singleton(AccessPolicy::class, fn ($app): AccessPolicy => AccessPolicy::fromConfig(
+            $app->make(Repository::class),
+            (string) $this->app->environment(),
+        ));
+
+        // One class, two registrations: a preview every assistant may call, and
+        // the destructive apply that stays hidden unless explicitly allowed.
+        $this->app->singleton(self::RETENTION_PREVIEW, fn ($app): RetentionTool => $this->retentionTool($app, false));
+        $this->app->singleton(self::RETENTION_APPLY, fn ($app): RetentionTool => $this->retentionTool($app, true));
+
+        $this->app->tag([
+            OverviewTool::class,
+            SetupGuideTool::class,
+            ConfigReferenceTool::class,
+            ListProfilesTool::class,
+            InspectEnvironmentTool::class,
+            ValidateConfigurationTool::class,
+            ConfigureTool::class,
+            ListBackupsTool::class,
+            RunBackupTool::class,
+            VerifyBackupTool::class,
+            self::RETENTION_PREVIEW,
+            self::RETENTION_APPLY,
+        ], self::MCP_TOOLS);
+
+        $this->app->singleton(McpServer::class, fn ($app): McpServer => new McpServer(
+            tools: $this->mcpTools($app),
+            resources: $this->mcpResources($app),
+            prompts: $this->mcpPrompts($app),
+            policy: $app->make(AccessPolicy::class),
+            instructions: $this->mcpInstructions(),
+        ));
+    }
+
+    private function retentionTool(Container $app, bool $destructive): RetentionTool
+    {
+        return new RetentionTool(
+            $app->make(ProfileResolver::class),
+            $app->make(RetentionManager::class),
+            $app->make(SnapshotDriver::class),
+            $app->make(Repository::class),
+            $destructive,
+        );
+    }
+
+    /**
+     * @return list<McpTool>
+     */
+    private function mcpTools(Container $app): array
+    {
+        $tools = [];
+
+        foreach ($app->tagged(self::MCP_TOOLS) as $tool) {
+            if ($tool instanceof McpTool) {
+                $tools[] = $tool;
+            }
+        }
+
+        return $tools;
+    }
+
+    /**
+     * @return list<McpResource>
+     */
+    private function mcpResources(Container $app): array
+    {
+        return [
+            new McpResource(
+                uri: 'backup-manager://guide/setup',
+                name: 'setup-guide',
+                title: 'Backup setup guide',
+                description: 'How to set backups up with this package, in the order the work should be done.',
+                mimeType: 'text/markdown',
+                reader: fn (): string => $app->make(SetupGuide::class)->render(),
+            ),
+            new McpResource(
+                uri: 'backup-manager://config/reference',
+                name: 'config-reference',
+                title: 'Configuration reference',
+                description: 'Every configuration key, with its type, allowed values and environment variable.',
+                mimeType: 'application/json',
+                reader: fn (): string => $this->json($app->make(ConfigReference::class)->toArray()),
+            ),
+            new McpResource(
+                uri: 'backup-manager://config/current',
+                name: 'current-config',
+                title: 'Current configuration',
+                description: 'The live backup-manager configuration, with credentials removed.',
+                mimeType: 'application/json',
+                reader: fn (): string => $this->json($this->redactedConfig($app)),
+            ),
+        ];
+    }
+
+    /**
+     * @return list<McpPrompt>
+     */
+    private function mcpPrompts(Container $app): array
+    {
+        return [
+            new McpPrompt(
+                name: 'set-up-backups',
+                title: 'Set up backups',
+                description: 'Walk through configuring, running and verifying a backup for this application.',
+                renderer: fn (): string => "Set up backups for this Laravel application.\n\n"
+                    .$app->make(SetupGuide::class)->render(),
+            ),
+        ];
+    }
+
+    private function mcpInstructions(): string
+    {
+        return 'Backup Manager backs up this Laravel application\'s databases and files. '
+            .'When the task is to set backups up, call backup_setup_guide first, then backup_overview and '
+            .'backup_inspect_environment before proposing anything — never invent a disk, a database '
+            .'connection or a configuration key. Configuration is written with backup_configure, which is a '
+            .'dry run unless told otherwise. Prove the result with backup_run followed by backup_verify. '
+            .'Restoring a backup is deliberately not exposed here: it overwrites a live application and '
+            .'belongs to a person running php artisan backup:restore.';
+    }
+
+    /**
+     * The live configuration with every credential removed — a resource is
+     * read by a model and may end up in a transcript.
+     *
+     * @return array<string, mixed>
+     */
+    private function redactedConfig(Container $app): array
+    {
+        /** @var array<string, mixed> $config */
+        $config = (array) $app->make(Repository::class)->get('backup-manager', []);
+
+        foreach ($app->make(ConfigReference::class)->options() as $option) {
+            if (! $option->secret || str_contains($option->key, '*')) {
+                continue;
+            }
+
+            $value = data_get($config, $option->key);
+
+            if ($value !== null && $value !== '') {
+                data_set($config, $option->key, '********');
+            }
+        }
+
+        return $config;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $data
+     */
+    private function json(array $data): string
+    {
+        return (string) json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     private function workingDirectory(Repository $config): string

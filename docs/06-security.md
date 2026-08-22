@@ -93,10 +93,46 @@ makes the backup verifiable independently of this package. It contains:
 - the **databases** dumped (connection, driver, database name, archived path);
 - the **archive** size and checksum;
 - **every file**: archive path, size, checksum, symlink info;
+- the **migrations** that had run when the backup was taken;
 - an optional **signature**.
 
 Because it is a sidecar, you can read it and verify the archive **without
 decrypting** — it is plain JSON you can open in any editor.
+
+### Matching a dump to a codebase
+
+A database dump only fits a codebase whose schema expectations match it, and the
+app version does not establish that — two commits can share a version string and
+differ by a migration. The manifest therefore records the applied migrations:
+
+```json
+"migrations": {
+  "ran": [
+    "2024_01_01_000000_create_users_table",
+    "2024_02_01_000000_add_roles_to_users"
+  ]
+}
+```
+
+`MigrationState` answers the questions that matter before a restore:
+
+```php
+$manifest = app(BackupRepository::class)->readManifest($backup);
+$current  = app(MigrationProbe::class)->capture();
+
+$current->ahead($manifest->migrations);   // migrations the code has, the dump doesn't
+$manifest->migrations->ahead($current);   // migrations the dump has, the code doesn't
+$current->matches($manifest->migrations); // exact fit
+```
+
+The first list means restoring will leave the schema behind the code — usually
+fixable by migrating afterwards. The second means the dump was taken on a newer
+schema than the code expects, which migrating cannot undo.
+
+Reading the migrations never fails a backup: an application with no database, an
+unreachable one, or one that has never migrated records `null` instead. Manifests
+written before schema 1.2 also read back as `null` — *not recorded*, which is not
+the same as *none had run*.
 
 ## Verifying a backup
 

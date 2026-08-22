@@ -33,8 +33,12 @@ final readonly class Manifest
      *
      * 1.1 adds the storage `mode` (archive vs incremental snapshot); older
      * manifests without it are read back as `archive`.
+     *
+     * 1.2 adds `migrations`, the schema state the backup was taken at; older
+     * manifests without it are read back as null, meaning "not recorded" rather
+     * than "none had run".
      */
-    public const SCHEMA_VERSION = '1.1';
+    public const SCHEMA_VERSION = '1.2';
 
     /**
      * @param  list<DatabaseArtifact>  $databases
@@ -54,6 +58,8 @@ final readonly class Manifest
         public Checksum $archiveChecksum,
         public array $config = [],
         public BackupMode $mode = BackupMode::Archive,
+        /** Schema state when the backup ran; null when it could not be read. */
+        public ?MigrationState $migrations = null,
         public ?Checksum $signature = null,
         public string $schemaVersion = self::SCHEMA_VERSION,
     ) {}
@@ -125,6 +131,7 @@ final readonly class Manifest
             archiveChecksum: $this->archiveChecksum,
             config: $this->config,
             mode: $this->mode,
+            migrations: $this->migrations,
             signature: $signature,
             schemaVersion: $this->schemaVersion,
         );
@@ -151,6 +158,7 @@ final readonly class Manifest
             archiveChecksum: $this->archiveChecksum,
             config: $this->config,
             mode: $this->mode,
+            migrations: $this->migrations,
             signature: null,
             schemaVersion: $this->schemaVersion,
         );
@@ -190,6 +198,7 @@ final readonly class Manifest
                 $this->files,
             ),
             'config' => $this->config,
+            'migrations' => $this->migrations?->toArray(),
             'signature' => $this->signature?->toArray(),
         ];
     }
@@ -260,6 +269,9 @@ final readonly class Manifest
             archiveChecksum: Checksum::fromArray($data['archive']['checksum']),
             config: $data['config'] ?? [],
             mode: BackupMode::from($data['mode'] ?? 'archive'),
+            migrations: is_array($data['migrations'] ?? null)
+                ? MigrationState::fromArray($data['migrations'])
+                : null,
             signature: isset($data['signature']) ? Checksum::fromArray($data['signature']) : null,
             schemaVersion: $data['schema_version'] ?? self::SCHEMA_VERSION,
         );

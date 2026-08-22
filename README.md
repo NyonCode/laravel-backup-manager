@@ -39,6 +39,7 @@ a UI on top of.
   - [Retention](#retention)
   - [Scheduling & queues](#scheduling--queues)
   - [Monitoring, history & notifications](#monitoring-history--notifications)
+  - [AI assistants (MCP)](#ai-assistants-mcp)
 - [CLI reference](#cli-reference)
 - [Programmatic API](#programmatic-api)
 - [Architecture](#architecture)
@@ -366,6 +367,31 @@ unhealthy destinations can notify you by mail and/or Slack:
 ],
 ```
 
+### AI assistants (MCP)
+
+```bash
+php artisan backup:mcp
+```
+
+Serves a [Model Context Protocol](https://modelcontextprotocol.io) server on
+stdin/stdout, so an AI assistant can read this installation — disks, database
+connections, dump binaries, the resolved profiles, the full configuration
+reference — then propose a configuration, write it, and prove it by running and
+verifying a real backup. No extra dependency; it ships with the free core.
+
+```bash
+claude mcp add backup-manager -- php artisan backup:mcp
+```
+
+Writes are bounded: only documented keys with values of the declared type,
+a dry run by default that also reports the findings the result *would* have,
+`env()`-backed settings routed to `.env`, comments in the config file preserved,
+and the previous file copied aside before an atomic write. Deleting backups is a
+separate destructive tool that stays hidden until you enable it, and restore is
+not exposed over MCP at all.
+
+See [docs/14-mcp.md](docs/14-mcp.md).
+
 ---
 
 ## Backup Manager Pro & the UI dashboard
@@ -401,6 +427,7 @@ Full tier breakdown and the upgrade flow: [docs/13-pro-and-ui.md](docs/13-pro-an
 | `backup:restore` | Restore (`--database`, `--files`, `--only`, `--no-verify`, `--unsafe`, `--force`) |
 | `backup:clean` | Apply retention (`--dry-run`, `--disk`) |
 | `backup:monitor` | Report backup health |
+| `backup:mcp` | Serve the MCP server for an AI assistant (`--read-only`) |
 
 Full flags and examples: [docs/cli.md](docs/11-cli.md).
 

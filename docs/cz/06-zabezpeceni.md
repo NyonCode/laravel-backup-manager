@@ -95,10 +95,45 @@ záloha ověřitelná nezávisle na tomto balíčku. Obsahuje:
 - zálohované **databáze** (připojení, ovladač, název databáze, cesta v archivu);
 - velikost a kontrolní součet **archivu**;
 - **každý soubor**: cesta v archivu, velikost, kontrolní součet, info o symlinku;
+- **migrace**, které byly nasazené v okamžiku zálohy;
 - volitelný **podpis**.
 
 Protože jde o sidecar, můžete jej číst a ověřit kontrolní součet archivu **bez
 dešifrování** — je to prostý JSON, který otevřete v jakémkoli editoru.
+
+### Spárování dumpu s kódem
+
+Databázový dump sedí jen ke kódu, jehož očekávání o schématu mu odpovídají — a
+verze aplikace to nedokazuje: dva commity můžou mít stejný version string a lišit
+se o migraci. Manifest proto zaznamenává nasazené migrace:
+
+```json
+"migrations": {
+  "ran": [
+    "2024_01_01_000000_create_users_table",
+    "2024_02_01_000000_add_roles_to_users"
+  ]
+}
+```
+
+`MigrationState` odpoví na to, co je před obnovou podstatné:
+
+```php
+$manifest = app(BackupRepository::class)->readManifest($backup);
+$current  = app(MigrationProbe::class)->capture();
+
+$current->ahead($manifest->migrations);   // migrace, které má kód a dump ne
+$manifest->migrations->ahead($current);   // migrace, které má dump a kód ne
+$current->matches($manifest->migrations); // přesná shoda
+```
+
+První seznam znamená, že obnova nechá schéma pozadu za kódem — obvykle to spraví
+následné zmigrování. Druhý znamená, že dump vznikl na novějším schématu, než jaké
+kód očekává, a to migrací zpět nespravíte.
+
+Čtení migrací nikdy nezhatí zálohu: aplikace bez databáze, s nedostupnou databází
+nebo bez jediné migrace zapíše `null`. Stejně tak manifesty vzniklé před schématem
+1.2 — `null` znamená *nezaznamenáno*, ne *žádné migrace neproběhly*.
 
 ## Ověření zálohy
 
