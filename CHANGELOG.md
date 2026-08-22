@@ -5,6 +5,15 @@ All notable changes to `nyoncode/laravel-backup-manager` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Test suite moved to **Pest 4**, with Pest 5 supported alongside it
+  (`^4.0|^5.0`). Which one is installed follows the environment: Pest 5 needs
+  PHP 8.4 and Symfony 8, so a Laravel 12 install stays on Pest 4 and gets the
+  newer major only with Laravel 13. Both were run against the full suite.
+
 ## [1.2.0] - 2026-08-22
 
 ### Fixed
