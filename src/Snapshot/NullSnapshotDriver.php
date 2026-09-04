@@ -42,8 +42,13 @@ final class NullSnapshotDriver implements SnapshotDriver
         throw self::unavailable();
     }
 
-    public function applyRetention(string $disk, string $path, RetentionPolicy $policy, bool $dryRun = false): SnapshotRetentionResult
-    {
+    public function applyRetention(
+        string $disk,
+        string $path,
+        RetentionPolicy $policy,
+        bool $dryRun = false,
+        ?string $profile = null,
+    ): SnapshotRetentionResult {
         return SnapshotRetentionResult::empty();
     }
 

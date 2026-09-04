@@ -110,8 +110,27 @@ příkaz nebo request, který je spustil:
     'connection' => env('BACKUP_QUEUE_CONNECTION'),
     'queue' => env('BACKUP_QUEUE_NAME', 'backups'),
     'timeout' => (int) env('BACKUP_QUEUE_TIMEOUT', 3600),
+    'restore_timeout' => null,   // null = použije se timeout
 ],
 ```
+
+Dejte zálohám vlastní připojení, ne to sdílené s webovými requesty. Jeho
+`retry_after` musí být **delší než `timeout`**, jinak fronta prohlásí dlouhou
+zálohu za ztracenou ještě za jejího běhu a pustí druhou vedle ní — nad týmž
+cílem a týmž deduplikovaným poolem:
+
+```php
+// config/queue.php
+'backups' => [
+    'driver' => 'redis',
+    'queue' => 'backups',
+    'retry_after' => 7200,   // > backup-manager.queue.timeout
+],
+```
+
+`restore_timeout` (`BACKUP_QUEUE_RESTORE_TIMEOUT`) platí pro joby, které obnovují.
+Obnova nejdřív stahuje, dešifruje, rozbaluje a dělá vlastní snímek před obnovou,
+takže bývá delší než záloha, ze které vznikla; `null` použije `timeout`.
 
 ## Plánování
 

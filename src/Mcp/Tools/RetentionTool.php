@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace Nyoncode\BackupManager\Mcp\Tools;
 
-use Illuminate\Contracts\Config\Repository;
-use Nyoncode\BackupManager\Contracts\Snapshot\SnapshotDriver;
-use Nyoncode\BackupManager\DTOs\RetentionPolicy;
 use Nyoncode\BackupManager\Enums\McpToolAccess;
-use Nyoncode\BackupManager\Managers\RetentionManager;
+use Nyoncode\BackupManager\Managers\CleanupManager;
 use Nyoncode\BackupManager\Mcp\ToolResult;
 use Nyoncode\BackupManager\Support\Bytes;
 use Nyoncode\BackupManager\Support\ProfileResolver;
@@ -27,9 +24,7 @@ final class RetentionTool extends Tool
 {
     public function __construct(
         private readonly ProfileResolver $resolver,
-        private readonly RetentionManager $retention,
-        private readonly SnapshotDriver $snapshots,
-        private readonly Repository $config,
+        private readonly CleanupManager $cleanup,
         private readonly bool $destructive = false,
     ) {}
 
@@ -83,37 +78,28 @@ final class RetentionTool extends Tool
     {
         $definition = $this->resolver->resolve($this->profile($arguments));
         $dryRun = ! $this->destructive || (bool) ($arguments['dry_run'] ?? true);
-
-        $policy = RetentionPolicy::fromConfig(
-            (array) $this->config->get('backup-manager.retention', []),
-            $definition->retention,
-        );
+        $policy = $this->cleanup->policyFor($definition);
 
         $disk = is_string($arguments['disk'] ?? null) && $arguments['disk'] !== '' ? $arguments['disk'] : null;
-        $disks = $disk !== null ? [$disk] : $definition->destinations;
 
         $report = [];
+        $disks = [];
         $deleted = 0;
         $bytes = 0;
 
-        foreach ($disks as $destination) {
-            $snapshots = $this->snapshots->applyRetention($destination, $definition->path, $policy, $dryRun);
-            $backups = array_merge(
-                $this->retention->apply($destination, $definition->path, $policy, $dryRun),
-                $snapshots->deletedSnapshots,
-            );
+        foreach ($this->cleanup->clean($definition, $disk, $dryRun) as $result) {
+            $disks[] = $result->disk;
+            $deleted += $result->deletedCount();
+            $bytes += $result->deletedBytes();
 
-            $deleted += count($backups);
-            $bytes += array_sum(array_map(static fn (StoredBackup $backup): int => $backup->size, $backups));
-
-            $report[$destination] = [
+            $report[$result->disk] = [
                 'backups' => array_map(static fn (StoredBackup $backup): array => [
                     'name' => $backup->name,
                     'created_at' => $backup->createdAt->format(DATE_ATOM),
                     'size_human' => Bytes::human($backup->size),
-                ], $backups),
-                'reclaimed_blobs' => $snapshots->reclaimedBlobs,
-                'reclaimed_blob_bytes' => $snapshots->reclaimedBytes,
+                ], $result->deleted),
+                'reclaimed_blobs' => $result->reclaimedBlobs,
+                'reclaimed_blob_bytes' => $result->reclaimedBytes,
             ];
         }
 

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Nyoncode\BackupManager\Jobs;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Nyoncode\BackupManager\Jobs\Concerns\RoutesToBackupQueue;
 use Nyoncode\BackupManager\Managers\BackupManager;
 
 /**
@@ -22,21 +22,13 @@ final class RunBackupJob implements ShouldQueue
 {
     use InteractsWithQueue;
     use Queueable;
+    use RoutesToBackupQueue;
     use SerializesModels;
-
-    /**
-     * Seconds the job may run before timing out.
-     */
-    public int $timeout;
 
     public function __construct(
         public readonly ?string $profile = null,
     ) {
-        $config = app(Repository::class);
-
-        $this->onConnection($config->get('backup-manager.queue.connection'));
-        $this->onQueue((string) $config->get('backup-manager.queue.queue', 'backups'));
-        $this->timeout = (int) $config->get('backup-manager.queue.timeout', 3600);
+        $this->routeToBackupQueue();
     }
 
     public function handle(BackupManager $manager): void

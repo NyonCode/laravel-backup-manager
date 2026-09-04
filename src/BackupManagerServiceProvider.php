@@ -38,10 +38,10 @@ use Nyoncode\BackupManager\Exceptions\IntegrityException;
 use Nyoncode\BackupManager\Listeners\LogsBackupActivity;
 use Nyoncode\BackupManager\Listeners\SendBackupNotifications;
 use Nyoncode\BackupManager\Managers\BackupManager;
+use Nyoncode\BackupManager\Managers\CleanupManager;
 use Nyoncode\BackupManager\Managers\CompressorManager;
 use Nyoncode\BackupManager\Managers\DatabaseManager;
 use Nyoncode\BackupManager\Managers\EncryptorManager;
-use Nyoncode\BackupManager\Managers\RetentionManager;
 use Nyoncode\BackupManager\Mcp\AccessPolicy;
 use Nyoncode\BackupManager\Mcp\McpPrompt;
 use Nyoncode\BackupManager\Mcp\McpResource;
@@ -374,9 +374,7 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
     {
         return new RetentionTool(
             $app->make(ProfileResolver::class),
-            $app->make(RetentionManager::class),
-            $app->make(SnapshotDriver::class),
-            $app->make(Repository::class),
+            $app->make(CleanupManager::class),
             $destructive,
         );
     }

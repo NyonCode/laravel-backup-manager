@@ -41,14 +41,26 @@ Long-running backups can be pushed to the queue:
 ],
 ```
 
-When enabled, `php artisan backup:run` dispatches a `RunBackupJob` to the queue
-instead of running inline (make sure a worker is processing the configured
-queue). Force a synchronous run with `--sync`:
+When enabled, `backup:run`, `backup:clean` and `backup:monitor` all dispatch a
+job to the queue instead of running inline (make sure a worker is processing the
+configured queue). Force a synchronous run with `--sync`:
 
 ```bash
-php artisan backup:run          # queued when queue.enabled = true
-php artisan backup:run --sync   # always runs immediately
+php artisan backup:run            # queued when queue.enabled = true
+php artisan backup:run --sync     # always runs immediately
+php artisan backup:clean          # CleanBackupsJob
+php artisan backup:monitor        # MonitorBackupsJob (Pro)
 ```
+
+Retention belongs on the queue as much as the backup does: for an incremental
+profile it reference-counts the entire blob pool before sweeping it, which on a
+large installation runs for minutes. Scheduled without a queue, that happens
+inside the scheduler's own process on your web machine.
+
+`backup:clean --dry-run` never queues — its whole product is the preview it
+prints. A queued `backup:monitor` **fails its job** when a destination is
+unhealthy, the queue's equivalent of the command's non-zero exit, so it shows up
+in `failed_jobs` rather than as a run that went fine.
 
 Scheduled backups are registered with `withoutOverlapping()`, so a slow run
 never collides with the next one or with retention/monitoring.

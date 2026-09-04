@@ -68,12 +68,50 @@ php artisan backup:clean --profile=nightly --disk=s3
 
 Retence se aplikuje na každý cíl profilu (nebo jen na `--disk`).
 
+## Retence platí jen pro svůj profil
+
+`path` má pro každý profil výchozí hodnotu `backups`, takže dva profily zapisující
+na stejný disk sdílejí adresář — to je běžný stav, ne výjimka. Politika každého
+profilu řídí **jen jeho vlastní zálohy**: jen ty se počítají do `keep_latest`,
+poměřují s limity a mažou.
+
+```bash
+php artisan backup:clean                 # politika výchozího profilu, jen jeho zálohy
+php artisan backup:clean --profile=full  # politika profilu full, jen jeho zálohy
+```
+
+Zálohy se rozlišují podle profilu zapsaného v manifestu, takže se na disku nic
+přesouvat nemusí. Záloha, jejíž manifest tenhle údaj ještě nemá — nebo nejde
+přečíst — se počítá jako záloha ptajícího se profilu, takže po upgradu se uklízí
+přesně to, co se uklízelo dřív. Pokud nechcete sdílet adresář vůbec, dejte
+profilu vlastní `path`.
+
+`backup:list`, `backup:verify` i `backup:restore` mají stejný rozsah: co profil
+vypíše, to jeho retence řídí.
+
 ## Programové použití
+
+Celá politika přes všechny cíle profilu:
+
+```php
+use Nyoncode\BackupManager\Managers\CleanupManager;
+use Nyoncode\BackupManager\Support\ProfileResolver;
+
+$definition = app(ProfileResolver::class)->resolve('nightly');
+$reports = app(CleanupManager::class)->clean($definition, dryRun: true);
+
+foreach ($reports as $report) {
+    echo "{$report->disk}: {$report->deletedCount()} záloh(y)\n";
+}
+```
+
+Nebo jeden engine na jednom cíli — profil předejte, jinak se berou v úvahu
+všechny zálohy v cestě:
 
 ```php
 use Nyoncode\BackupManager\DTOs\RetentionPolicy;
 use Nyoncode\BackupManager\Managers\RetentionManager;
 
 $policy = RetentionPolicy::fromConfig(config('backup-manager.retention'));
-$deleted = app(RetentionManager::class)->apply('s3', 'backups', $policy, dryRun: true);
+$deleted = app(RetentionManager::class)->apply('s3', 'backups', $policy, dryRun: true, profile: 'nightly');
 ```

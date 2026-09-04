@@ -6,6 +6,7 @@ namespace Nyoncode\BackupManager\Storage;
 
 use DateTimeImmutable;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Nyoncode\BackupManager\Contracts\Storage\BackupRepository;
 use Nyoncode\BackupManager\Enums\BackupMode;
 use Nyoncode\BackupManager\Exceptions\ManifestException;
@@ -35,14 +36,16 @@ final class DiskBackupRepository implements BackupRepository
             }
 
             $name = basename($file);
+            $manifestPath = $directory.'/'.StoredBackup::manifestNameFor($name);
 
             $backups[] = new StoredBackup(
                 disk: $disk,
                 archivePath: $file,
-                manifestPath: $directory.'/'.StoredBackup::manifestNameFor($name),
+                manifestPath: $manifestPath,
                 name: $name,
                 size: (int) $storage->size($file),
                 createdAt: $this->createdAt($name, (int) $storage->lastModified($file)),
+                profile: $this->profileOf($storage, $manifestPath),
             );
         }
 
@@ -69,6 +72,8 @@ final class DiskBackupRepository implements BackupRepository
                 continue;
             }
 
+            $profile = $manifest->config['profile'] ?? null;
+
             $snapshots[] = new StoredBackup(
                 disk: $disk,
                 archivePath: '',
@@ -77,6 +82,7 @@ final class DiskBackupRepository implements BackupRepository
                 size: $manifest->archiveSize,
                 createdAt: $manifest->createdAt,
                 mode: BackupMode::Incremental,
+                profile: is_string($profile) && $profile !== '' ? $profile : null,
             );
         }
 
@@ -130,6 +136,35 @@ final class DiskBackupRepository implements BackupRepository
 
         if ($storage->exists($backup->manifestPath)) {
             $storage->delete($backup->manifestPath);
+        }
+    }
+
+    /**
+     * The profile an archive was taken under, from its manifest sidecar.
+     *
+     * Reads only the one key rather than hydrating a whole {@see Manifest}: this
+     * runs once per archive in a listing, and a sidecar written by a newer
+     * schema — or none at all — must not cost the listing. Anything unreadable
+     * answers null, which every caller reads as "unknown, treat as ours".
+     */
+    private function profileOf(Filesystem $storage, string $manifestPath): ?string
+    {
+        try {
+            $raw = $storage->get($manifestPath);
+
+            if (! is_string($raw)) {
+                return null;
+            }
+
+            /** @var array<string, mixed>|null $data */
+            $data = json_decode($raw, true);
+            $profile = is_array($data) && is_array($data['config'] ?? null)
+                ? ($data['config']['profile'] ?? null)
+                : null;
+
+            return is_string($profile) && $profile !== '' ? $profile : null;
+        } catch (Throwable) {
+            return null;
         }
     }
 

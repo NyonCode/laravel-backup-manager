@@ -41,14 +41,26 @@ Dlouho běžící zálohy lze poslat do fronty:
 ],
 ```
 
-Když je zapnuto, `php artisan backup:run` odešle `RunBackupJob` do fronty místo
-běhu na místě (musí běžet worker na dané frontě). Synchronní běh vynutíte přes
-`--sync`:
+Když je zapnuto, `backup:run`, `backup:clean` i `backup:monitor` odešlou job do
+fronty místo běhu na místě (musí běžet worker na dané frontě). Synchronní běh
+vynutíte přes `--sync`:
 
 ```bash
-php artisan backup:run          # ve frontě, když queue.enabled = true
-php artisan backup:run --sync   # vždy okamžitě
+php artisan backup:run            # ve frontě, když queue.enabled = true
+php artisan backup:run --sync     # vždy okamžitě
+php artisan backup:clean          # CleanBackupsJob
+php artisan backup:monitor        # MonitorBackupsJob (Pro)
 ```
+
+Retence patří do fronty stejně jako záloha: u inkrementálního profilu nejdřív
+spočítá reference nad celým blob poolem a teprve pak uklízí, což u velké
+instalace trvá minuty. Naplánovaná bez fronty se tohle děje v procesu scheduleru
+na webovém stroji.
+
+`backup:clean --dry-run` do fronty nikdy nejde — jeho jediným výstupem je náhled,
+který vypíše. Zařazený `backup:monitor` při nezdravém cíli **selže jako job**, což
+je ve frontě obdoba nenulového návratového kódu příkazu, takže se objeví ve
+`failed_jobs` a ne jako v pořádku vyřízený běh.
 
 Naplánované zálohy jsou registrovány s `withoutOverlapping()`, takže pomalý běh
 nikdy nekoliduje s dalším ani s retencí/monitoringem.

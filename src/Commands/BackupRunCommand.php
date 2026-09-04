@@ -6,6 +6,7 @@ namespace Nyoncode\BackupManager\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Bus\Dispatcher;
+use Nyoncode\BackupManager\Commands\Concerns\QueuesWork;
 use Nyoncode\BackupManager\Jobs\RunBackupJob;
 use Nyoncode\BackupManager\Managers\BackupManager;
 use Nyoncode\BackupManager\Support\Bytes;
@@ -16,6 +17,8 @@ use Throwable;
  */
 final class BackupRunCommand extends Command
 {
+    use QueuesWork;
+
     protected $signature = 'backup:run
         {--profile= : The backup profile to run (defaults to the configured profile)}
         {--sync : Run immediately even when queued backups are enabled}';
@@ -77,10 +80,5 @@ final class BackupRunCommand extends Command
         $this->components->info('Backup completed successfully.');
 
         return self::SUCCESS;
-    }
-
-    private function shouldQueue(): bool
-    {
-        return (bool) config('backup-manager.queue.enabled', false) && ! $this->option('sync');
     }
 }

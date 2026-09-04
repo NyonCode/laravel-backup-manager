@@ -50,6 +50,14 @@ interface SnapshotDriver
 
     /**
      * Prune snapshots by the retention policy and garbage-collect the pool.
+     *
+     * @param  string|null  $profile  Scope to this profile's snapshots; null considers every snapshot in the path.
      */
-    public function applyRetention(string $disk, string $path, RetentionPolicy $policy, bool $dryRun = false): SnapshotRetentionResult;
+    public function applyRetention(
+        string $disk,
+        string $path,
+        RetentionPolicy $policy,
+        bool $dryRun = false,
+        ?string $profile = null,
+    ): SnapshotRetentionResult;
 }

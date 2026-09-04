@@ -110,8 +110,28 @@ console command or request that started them:
     'connection' => env('BACKUP_QUEUE_CONNECTION'),
     'queue' => env('BACKUP_QUEUE_NAME', 'backups'),
     'timeout' => (int) env('BACKUP_QUEUE_TIMEOUT', 3600),
+    'restore_timeout' => null,   // null = use timeout
 ],
 ```
+
+Give backups their own connection rather than reusing the one your web requests
+share. Its `retry_after` must be **longer than `timeout`**, or the queue declares
+a long backup lost while it is still running and starts a second one beside it —
+over the same destination and the same deduplicated blob pool:
+
+```php
+// config/queue.php
+'backups' => [
+    'driver' => 'redis',
+    'queue' => 'backups',
+    'retry_after' => 7200,   // > backup-manager.queue.timeout
+],
+```
+
+`restore_timeout` (`BACKUP_QUEUE_RESTORE_TIMEOUT`) covers jobs that restore. A
+restore downloads, decrypts, unpacks and takes its own pre-restore snapshot
+first, so it usually needs longer than the backup that produced it; `null` uses
+`timeout`.
 
 ## Scheduling
 

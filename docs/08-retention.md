@@ -68,12 +68,50 @@ php artisan backup:clean --profile=nightly --disk=s3
 
 Retention is applied to every destination of the profile (or just `--disk`).
 
+## Retention is scoped to its profile
+
+`path` defaults to `backups` for every profile, so two profiles writing to the
+same disk share a directory — that is the normal arrangement, not an edge case.
+Each profile's policy governs **only its own backups**: they are the only ones
+counted towards `keep_latest`, measured against the caps, or deleted.
+
+```bash
+php artisan backup:clean                 # the default profile's policy, its backups only
+php artisan backup:clean --profile=full  # the full profile's policy, its backups only
+```
+
+Backups are told apart by the profile recorded in their manifest, so nothing has
+to move on disk. A backup whose manifest predates that record — or cannot be read
+— counts as the asking profile's, so upgrading keeps cleaning up exactly what it
+cleaned up before. Give a profile its own `path` if you would rather they never
+share a directory at all.
+
+`backup:list`, `backup:verify` and `backup:restore` are scoped the same way: the
+set a profile lists is the set its retention governs.
+
 ## Programmatic use
+
+The whole policy, across every destination of a profile:
+
+```php
+use Nyoncode\BackupManager\Managers\CleanupManager;
+use Nyoncode\BackupManager\Support\ProfileResolver;
+
+$definition = app(ProfileResolver::class)->resolve('nightly');
+$reports = app(CleanupManager::class)->clean($definition, dryRun: true);
+
+foreach ($reports as $report) {
+    echo "{$report->disk}: {$report->deletedCount()} backup(s)\n";
+}
+```
+
+Or one engine on one destination — pass the profile, or every backup in the path
+is considered:
 
 ```php
 use Nyoncode\BackupManager\DTOs\RetentionPolicy;
 use Nyoncode\BackupManager\Managers\RetentionManager;
 
 $policy = RetentionPolicy::fromConfig(config('backup-manager.retention'));
-$deleted = app(RetentionManager::class)->apply('s3', 'backups', $policy, dryRun: true);
+$deleted = app(RetentionManager::class)->apply('s3', 'backups', $policy, dryRun: true, profile: 'nightly');
 ```

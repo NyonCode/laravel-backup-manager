@@ -9,6 +9,7 @@ use Nyoncode\BackupManager\Commands\Concerns\ResolvesBackups;
 use Nyoncode\BackupManager\Contracts\Storage\BackupRepository;
 use Nyoncode\BackupManager\Support\Bytes;
 use Nyoncode\BackupManager\Support\ProfileResolver;
+use Nyoncode\BackupManager\ValueObjects\StoredBackup;
 
 /**
  * Lists the backups stored for a profile on a destination.
@@ -28,10 +29,16 @@ final class BackupListCommand extends Command
         $definition = $this->definition($resolver);
         $disk = $this->disk($definition);
 
-        $backups = array_merge(
-            $repository->list($disk, $definition->path),
-            $repository->listSnapshots($disk, $definition->path),
-        );
+        // Scoped to the profile: destinations are shared by default, and a
+        // listing that shows another profile's backups is a listing you cannot
+        // reconcile with what this profile's retention will keep.
+        $backups = array_values(array_filter(
+            array_merge(
+                $repository->list($disk, $definition->path),
+                $repository->listSnapshots($disk, $definition->path),
+            ),
+            static fn (StoredBackup $backup): bool => $backup->belongsTo($definition->profile),
+        ));
 
         usort($backups, static fn ($a, $b): int => $b->createdAt <=> $a->createdAt);
 

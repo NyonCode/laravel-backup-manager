@@ -63,10 +63,14 @@ php artisan backup:clean --dry-run
 php artisan backup:clean --profile=nightly --disk=s3
 ```
 
+Only the profile's own backups are considered, even where several profiles share
+a disk and path. See [Retention](08-retention.md).
+
 | Option | Description |
 |--------|-------------|
 | `--disk=` | Only clean this destination disk |
 | `--dry-run` | Show what would be deleted without deleting |
+| `--sync` | Run immediately even when queued backups are enabled |
 
 ## `backup:monitor`
 
@@ -77,6 +81,14 @@ unhealthy.
 php artisan backup:monitor
 php artisan backup:monitor --profile=nightly
 ```
+
+| Option | Description |
+|--------|-------------|
+| `--sync` | Run immediately even when queued backups are enabled |
+
+A destination that cannot be read at all — an expired token, a network outage —
+is reported as unhealthy with the underlying error, not raised as a failure of
+the whole report.
 
 ## `backup:mcp`
 

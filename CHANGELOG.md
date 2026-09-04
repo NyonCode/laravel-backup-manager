@@ -5,7 +5,53 @@ All notable changes to `nyoncode/laravel-backup-manager` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.1]
+
+### Fixed
+
+- **Retention judged every backup in the path, not the profile's own.**
+  `RetentionManager::apply()` listed the whole destination and deleted whatever
+  fell outside the keep-set, without ever asking which profile a backup belonged
+  to. Since `path` defaults to `backups` for every profile, two profiles sharing
+  a disk is the *default* arrangement — so a nightly `backup:clean` run under the
+  default profile's policy pruned the fortnightly full backups sitting beside it.
+  Nothing reported it; `keep_latest = 5` on the other profile simply never held.
+  Every stored backup now carries the profile from its manifest, and both
+  retention engines count and delete only their own. Backups whose manifest
+  predates the tag (or cannot be read) still count as the asking profile's, so an
+  upgrade keeps cleaning up exactly what it cleaned up before.
+
+### Added
+
+- **`backup:clean` can go to the queue**, symmetrically with `backup:run`: with
+  `BACKUP_QUEUE=true` it dispatches the new `CleanBackupsJob` and `--sync` forces
+  it inline. Scheduled without one, a cleanup that reference-counts an entire
+  blob pool ran inside the scheduler's process on the web machine — no worker
+  memory limit, nothing in `failed_jobs`, invisible to any queue dashboard.
+  `--dry-run` never queues: its whole product is the preview it prints.
+- **`queue.restore_timeout`** (`BACKUP_QUEUE_RESTORE_TIMEOUT`) for jobs that
+  restore. A restore downloads, decrypts, unpacks and takes its own pre-restore
+  snapshot first, so it routinely outlasts the backup that produced it. Null —
+  the default — uses `queue.timeout`.
+- `CleanupManager`, the one place a profile's retention policy is applied across
+  its destinations. The CLI, the queue, the dashboard and the MCP tool had each
+  grown their own copy of the same two-engine sequence; they now share this one,
+  so none of them can drift on which backups a policy governs.
+- `StoredBackup::$profile` and `StoredBackup::belongsTo()`.
+- `CleanupReport`, describing what retention did to one destination.
+
+### Changed
+
+- **Listings are scoped to their profile.** `backup:list`, `backup:verify` and
+  `backup:restore` no longer offer up a neighbouring profile's backups from a
+  shared destination — the set you list is now the set that profile's retention
+  governs.
+- An empty or null `queue.queue` falls back to `backups` instead of dispatching
+  onto a queue named `''`, which no worker listens on.
+- `RetentionManager::apply()` and the `SnapshotDriver::applyRetention()` contract
+  take an optional trailing `?string $profile`. Existing calls keep working
+  unchanged (null means "every backup in the path", the old behaviour); a custom
+  `SnapshotDriver` implementation needs the new parameter in its signature.
 
 ### Changed
 

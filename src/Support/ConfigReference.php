@@ -330,9 +330,15 @@ final class ConfigReference
             new ConfigOption(
                 key: 'queue.timeout',
                 type: 'integer',
-                description: 'Maximum seconds a queued backup job may run.',
+                description: 'Maximum seconds a queued backup job may run. Keep the connection\'s retry_after above this, or the queue will start a second run beside the first.',
                 env: 'BACKUP_QUEUE_TIMEOUT',
                 default: 3600,
+            ),
+            new ConfigOption(
+                key: 'queue.restore_timeout',
+                type: 'integer?',
+                description: 'Maximum seconds a queued restore may run. Null uses queue.timeout; a restore is usually the longer of the two.',
+                env: 'BACKUP_QUEUE_RESTORE_TIMEOUT',
             ),
 
             // ---- Schedule ------------------------------------------------

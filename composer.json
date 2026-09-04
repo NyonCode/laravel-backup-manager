@@ -23,7 +23,7 @@
         "illuminate/filesystem": "^12.0|^13.0",
         "illuminate/queue": "^12.0|^13.0",
         "illuminate/support": "^12.0|^13.0",
-        "nyoncode/laravel-package-toolkit": "^2.1.1",
+        "nyoncode/laravel-package-toolkit": "^2.4.2",
         "symfony/finder": "^7.0|^8.0",
         "symfony/process": "^7.0|^8.0"
     },

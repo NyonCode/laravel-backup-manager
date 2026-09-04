@@ -63,10 +63,14 @@ php artisan backup:clean --dry-run
 php artisan backup:clean --profile=nightly --disk=s3
 ```
 
+Bere v úvahu jen zálohy vlastního profilu, i když víc profilů sdílí disk a cestu.
+Viz [Retence](08-retence.md).
+
 | Volba | Popis |
 |-------|-------|
 | `--disk=` | Vyčistit jen tento cílový disk |
 | `--dry-run` | Zobrazit, co by se smazalo, bez mazání |
+| `--sync` | Spustit hned, i když je zapnuté zálohování přes frontu |
 
 ## `backup:monitor`
 
@@ -76,6 +80,13 @@ Nahlásí zdraví záloh profilu. Končí nenulovým kódem, je-li jakýkoli cí
 php artisan backup:monitor
 php artisan backup:monitor --profile=nightly
 ```
+
+| Volba | Popis |
+|-------|-------|
+| `--sync` | Spustit hned, i když je zapnuté zálohování přes frontu |
+
+Cíl, který vůbec nejde přečíst — propadlý token, výpadek sítě — se nahlásí jako
+nezdravý včetně původní chyby; neshodí celou zprávu.
 
 ## `backup:mcp`
 

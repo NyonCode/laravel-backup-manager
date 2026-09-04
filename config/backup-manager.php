@@ -220,6 +220,13 @@ return [
         'connection' => env('BACKUP_QUEUE_CONNECTION'),
         'queue' => env('BACKUP_QUEUE_NAME', 'backups'),
         'timeout' => (int) env('BACKUP_QUEUE_TIMEOUT', 3600),
+
+        // A restore downloads, decrypts, unpacks and takes its own pre-restore
+        // snapshot first, so it routinely outlasts the backup that produced it.
+        // Null uses the timeout above.
+        'restore_timeout' => env('BACKUP_QUEUE_RESTORE_TIMEOUT') !== null
+            ? (int) env('BACKUP_QUEUE_RESTORE_TIMEOUT')
+            : null,
     ],
 
     /*

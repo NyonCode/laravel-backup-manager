@@ -56,10 +56,15 @@ trait ResolvesBackups
     ): ?StoredBackup {
         $disk = $this->disk($definition);
 
-        $backups = array_merge(
-            $repository->list($disk, $definition->path),
-            $repository->listSnapshots($disk, $definition->path),
-        );
+        $backups = array_values(array_filter(
+            array_merge(
+                $repository->list($disk, $definition->path),
+                $repository->listSnapshots($disk, $definition->path),
+            ),
+            // A profile only offers up its own backups, even where several
+            // profiles write to the same disk and path.
+            static fn (StoredBackup $backup): bool => $backup->belongsTo($definition->profile),
+        ));
 
         usort($backups, static fn (StoredBackup $a, StoredBackup $b): int => $b->createdAt <=> $a->createdAt);
 
