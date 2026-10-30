@@ -1,3 +1,8 @@
+---
+title: Databases
+description: "Backup Manager backs up your databases by running each engine's own dump tool (such as mysqldump) for you — there's no SQL to write."
+key: databases
+---
 # Databases
 
 Backup Manager backs up your databases by running each engine's own dump tool

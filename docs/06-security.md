@@ -1,3 +1,8 @@
+---
+title: "Security & the manifest"
+description: "Backup Manager provides four layers of protection: encryption, checksums,"
+key: security
+---
 # Security & the manifest
 
 Backup Manager provides four layers of protection: **encryption**, **checksums**,

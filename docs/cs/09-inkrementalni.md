@@ -1,3 +1,8 @@
+---
+title: Inkrementální a deduplikované zálohy
+description: "Každá běžná záloha je úplný, soběstačný archiv."
+key: incremental
+---
 # Inkrementální a deduplikované zálohy
 
 > **Funkce Pro.** Inkrementální/deduplikované zálohy vyžadují

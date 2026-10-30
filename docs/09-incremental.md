@@ -1,3 +1,8 @@
+---
+title: "Incremental & deduplicated backups"
+description: "Every ordinary backup is a full, self-contained archive."
+key: incremental
+---
 # Incremental & deduplicated backups
 
 > **Pro feature.** Incremental/deduplicated backups require

@@ -1,3 +1,8 @@
+---
+title: Retence
+description: "Bez zásahu se zálohy hromadí, až zaplní disk. Retence je politika, která rozhoduje, které historické zálohy ponechat, a zbytek odstraní."
+key: retention
+---
 # Retence
 
 Bez zásahu se zálohy hromadí, až zaplní disk. **Retence** je politika, která

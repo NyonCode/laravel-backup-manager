@@ -1,3 +1,8 @@
+---
+title: Úložiště (cíle)
+description: "filesystem, funguje jakýkoli ovladač disku bez zvláštního kódu: Local, S3-kompatibilní object storage, FTP, SFTP, Azure Blob, Backblaze B2, WebDAV a cokoli…"
+key: storage
+---
 # Úložiště (cíle)
 
 **Cíl** je běžný Laravel filesystem disk. Protože balíček zapisuje přes Laravel

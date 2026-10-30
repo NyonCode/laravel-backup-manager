@@ -1,3 +1,8 @@
+---
+title: Rozšíření balíčku
+description: Backup Manager je postaven na kompozici před dědičností.
+key: extending
+---
 # Rozšíření balíčku
 
 Backup Manager je postaven na **kompozici před dědičností**. Každá schopnost žije

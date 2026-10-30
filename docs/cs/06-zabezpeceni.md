@@ -1,3 +1,8 @@
+---
+title: Zabezpečení a manifest
+description: "Backup Manager poskytuje čtyři vrstvy ochrany: šifrování, kontrolní součty, podepisování a manifest."
+key: security
+---
 # Zabezpečení a manifest
 
 Backup Manager poskytuje čtyři vrstvy ochrany: **šifrování**, **kontrolní

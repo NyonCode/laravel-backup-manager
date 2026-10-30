@@ -1,4 +1,9 @@
-# Backup Manager — Dokumentace (CZ)
+---
+title: Backup Manager — Dokumentace
+description: Obsah dokumentace balíčku Backup Manager — od úvodního návodu po obnovu, retenci a plánování záloh.
+key: readme
+---
+# Backup Manager — Dokumentace
 
 Vítejte v dokumentaci balíčku Backup Manager. Jste tu poprvé? Projděte si
 tutoriál [Začínáme](00-zaciname.md) — vezme vás od nuly k ověřené a obnovitelné

@@ -1,3 +1,8 @@
+---
+title: Konfigurace
+description: Všechny volby žijí v config/backup-manager.php. Tato stránka jimi projde sekci po sekci.
+key: configuration
+---
 # Konfigurace
 
 Všechny volby žijí v `config/backup-manager.php`. Tato stránka jimi projde sekci

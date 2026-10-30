@@ -1,3 +1,8 @@
+---
+title: Instalace
+description: "Backup Manager se instaluje jako každý jiný Laravel balíček: nainstalujete ho Composerem, publikujete konfigurační soubor a hned můžete spustit první zálohu."
+key: installation
+---
 # Instalace
 
 Backup Manager se instaluje jako každý jiný Laravel balíček: nainstalujete ho
@@ -24,7 +29,7 @@ potřebujete jen ty pro databáze, které skutečně používáte:
 | PostgreSQL | `pg_dump`, `psql` (obnova) |
 | SQLite | žádná (kopie souboru) |
 
-## Instalace
+## Instalace balíčku
 
 ```bash
 composer require nyoncode/laravel-backup-manager
