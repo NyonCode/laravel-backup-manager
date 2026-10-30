@@ -1,3 +1,8 @@
+---
+title: Přehled CLI
+description: "Všechny příkazy přijímají --profile= pro cílení na konkrétní profil (výchozí: nakonfigurovaný profil default)."
+key: cli
+---
 # Přehled CLI
 
 Všechny příkazy přijímají `--profile=` pro cílení na konkrétní profil (výchozí:

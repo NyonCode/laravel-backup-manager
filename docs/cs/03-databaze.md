@@ -1,3 +1,8 @@
+---
+title: Databáze
+description: "Backup Manager zálohuje vaše databáze tak, že za vás spustí dump nástroj daného enginu (například mysqldump) — žádné SQL psát nemusíte."
+key: databases
+---
 # Databáze
 
 Backup Manager zálohuje vaše databáze tak, že za vás spustí dump nástroj daného

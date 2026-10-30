@@ -1,3 +1,8 @@
+---
+title: Backup Manager — Documentation
+description: Table of contents of the Backup Manager documentation, from the getting-started tutorial to restore, retention and scheduling.
+key: readme
+---
 # Backup Manager — Documentation
 
 Welcome to the Backup Manager documentation. New here? Follow the

@@ -1,3 +1,8 @@
+---
+title: Restore
+description: "Restoring reverses the backup pipeline: the archive is downloaded, its integrity verified against the manifest, then it is decrypted, decompressed,…"
+key: restore
+---
 # Restore
 
 Restoring reverses the backup pipeline: the archive is downloaded, its integrity

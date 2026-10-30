@@ -1,3 +1,8 @@
+---
+title: CLI reference
+description: "All commands accept --profile= to target a specific profile (default: the configured default profile)."
+key: cli
+---
 # CLI reference
 
 All commands accept `--profile=` to target a specific profile (default: the

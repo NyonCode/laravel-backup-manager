@@ -1,3 +1,8 @@
+---
+title: Začínáme
+description: "Tento tutoriál vás vezme od nuly k reálné, ověřené záloze, kterou umíte obnovit — přibližně za deset minut."
+key: getting-started
+---
 # Začínáme
 
 Tento tutoriál vás vezme od nuly k **reálné, ověřené záloze, kterou umíte

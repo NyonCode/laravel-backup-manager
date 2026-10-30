@@ -1,3 +1,8 @@
+---
+title: Obnova
+description: "Obnova obrací zálohovací pipeline: archiv se stáhne, ověří se jeho integrita vůči manifestu, poté se dešifruje, dekomprimuje, rozbalí a obnoví."
+key: restore
+---
 # Obnova
 
 Obnova obrací zálohovací pipeline: archiv se stáhne, ověří se jeho integrita vůči

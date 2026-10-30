@@ -1,3 +1,8 @@
+---
+title: Storage destinations
+description: A destination is an ordinary Laravel filesystem disk.
+key: storage
+---
 # Storage destinations
 
 A **destination** is an ordinary Laravel filesystem disk. Because the package

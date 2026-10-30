@@ -1,3 +1,8 @@
+---
+title: Extending the package
+description: Backup Manager is built around composition over inheritance.
+key: extending
+---
 # Extending the package
 
 Backup Manager is built around **composition over inheritance**. Every capability

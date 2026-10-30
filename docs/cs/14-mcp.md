@@ -1,3 +1,8 @@
+---
+title: AI asistenti (MCP)
+description: "Nastavení záloh je hromádka rozhodnutí — co zahrnout, kam ukládat, jak šifrovat, jak dlouho držet — a každé z nich se dá nenápadně pokazit."
+key: mcp
+---
 # AI asistenti (MCP)
 
 Nastavení záloh je hromádka rozhodnutí — co zahrnout, kam ukládat, jak šifrovat,

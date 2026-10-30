@@ -1,3 +1,8 @@
+---
+title: Getting started
+description: "This tutorial takes you from nothing to a real, verified backup that you can restore — in about ten minutes."
+key: getting-started
+---
 # Getting started
 
 This tutorial takes you from nothing to a **real, verified backup that you can

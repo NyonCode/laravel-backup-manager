@@ -1,3 +1,8 @@
+---
+title: Plánování a monitoring
+description: "Zálohy se vyplatí, když běží samy a někdo se dozví, když nějaká selže."
+key: scheduling
+---
 # Plánování a monitoring
 
 Zálohy se vyplatí, když běží samy a někdo se dozví, když nějaká selže. Tato

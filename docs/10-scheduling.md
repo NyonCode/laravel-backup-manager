@@ -1,3 +1,8 @@
+---
+title: "Scheduling & monitoring"
+description: Backups earn their keep when they run on their own and someone is told if one fails.
+key: scheduling
+---
 # Scheduling & monitoring
 
 Backups earn their keep when they run on their own and someone is told if one

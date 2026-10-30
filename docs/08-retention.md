@@ -1,3 +1,8 @@
+---
+title: Retention
+description: "Left alone, backups pile up until they fill the disk. Retention is the policy that decides which historical backups to keep and removes the rest."
+key: retention
+---
 # Retention
 
 Left alone, backups pile up until they fill the disk. **Retention** is the policy

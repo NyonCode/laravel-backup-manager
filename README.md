@@ -14,7 +14,7 @@ It is designed around **composition over inheritance**: every capability
 replaceable unit behind an interface, so it is easy to test, extend and to build
 a UI on top of.
 
-> 🇨🇿 Kompletní česká dokumentace: [`docs/cz`](docs/cz/README.md).
+> 🇨🇿 Kompletní česká dokumentace: [`docs/cs`](docs/cs/README.md).
 > The badge URLs assume `github.com/nyoncode/laravel-backup-manager` — adjust if
 > your repository lives elsewhere.
 
@@ -504,19 +504,19 @@ CI ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)) runs:
 
 | Topic | English | Česky |
 |-------|---------|-------|
-| Overview & index | [docs/README.md](docs/README.md) | [docs/cz/README.md](docs/cz/README.md) |
-| Getting started | [getting-started.md](docs/00-getting-started.md) | [zaciname.md](docs/cz/00-zaciname.md) |
-| Installation | [installation.md](docs/01-installation.md) | [instalace.md](docs/cz/01-instalace.md) |
-| Configuration | [configuration.md](docs/02-configuration.md) | [konfigurace.md](docs/cz/02-konfigurace.md) |
-| Databases | [databases.md](docs/03-databases.md) | [databaze.md](docs/cz/03-databaze.md) |
-| Files | [files.md](docs/04-files.md) | [soubory.md](docs/cz/04-soubory.md) |
-| Storage | [storage.md](docs/05-storage.md) | [uloziste.md](docs/cz/05-uloziste.md) |
-| Security & manifest | [security.md](docs/06-security.md) | [zabezpeceni.md](docs/cz/06-zabezpeceni.md) |
-| Restore | [restore.md](docs/07-restore.md) | [obnova.md](docs/cz/07-obnova.md) |
-| Retention | [retention.md](docs/08-retention.md) | [retence.md](docs/cz/08-retence.md) |
-| Scheduling & monitoring | [scheduling.md](docs/10-scheduling.md) | [planovani.md](docs/cz/10-planovani.md) |
-| CLI reference | [cli.md](docs/11-cli.md) | [cli.md](docs/cz/11-cli.md) |
-| Extending | [extending.md](docs/12-extending.md) | [rozsireni.md](docs/cz/12-rozsireni.md) |
+| Overview & index | [docs/README.md](docs/README.md) | [docs/cs/README.md](docs/cs/README.md) |
+| Getting started | [getting-started.md](docs/00-getting-started.md) | [zaciname.md](docs/cs/00-zaciname.md) |
+| Installation | [installation.md](docs/01-installation.md) | [instalace.md](docs/cs/01-instalace.md) |
+| Configuration | [configuration.md](docs/02-configuration.md) | [konfigurace.md](docs/cs/02-konfigurace.md) |
+| Databases | [databases.md](docs/03-databases.md) | [databaze.md](docs/cs/03-databaze.md) |
+| Files | [files.md](docs/04-files.md) | [soubory.md](docs/cs/04-soubory.md) |
+| Storage | [storage.md](docs/05-storage.md) | [uloziste.md](docs/cs/05-uloziste.md) |
+| Security & manifest | [security.md](docs/06-security.md) | [zabezpeceni.md](docs/cs/06-zabezpeceni.md) |
+| Restore | [restore.md](docs/07-restore.md) | [obnova.md](docs/cs/07-obnova.md) |
+| Retention | [retention.md](docs/08-retention.md) | [retence.md](docs/cs/08-retence.md) |
+| Scheduling & monitoring | [scheduling.md](docs/10-scheduling.md) | [planovani.md](docs/cs/10-planovani.md) |
+| CLI reference | [cli.md](docs/11-cli.md) | [cli.md](docs/cs/11-cli.md) |
+| Extending | [extending.md](docs/12-extending.md) | [rozsireni.md](docs/cs/12-rozsireni.md) |
 
 ---
 

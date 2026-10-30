@@ -1,3 +1,8 @@
+---
+title: Configuration
+description: Every option lives in config/backup-manager.php. This page walks through it section by section.
+key: configuration
+---
 # Configuration
 
 Every option lives in `config/backup-manager.php`. This page walks through it

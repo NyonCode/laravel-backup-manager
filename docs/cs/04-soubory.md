@@ -1,3 +1,8 @@
+---
+title: Soubory
+description: "Záloha může vedle databází — nebo místo nich — zahrnout soubory a složky z vašeho projektu. Tato stránka popisuje, co se do zálohy dostane a jak to doladit."
+key: files
+---
 # Soubory
 
 Záloha může vedle databází — nebo místo nich — zahrnout soubory a složky z vašeho

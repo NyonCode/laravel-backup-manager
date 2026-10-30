@@ -1,3 +1,8 @@
+---
+title: Files
+description: A backup can include files and folders from your project alongside — or instead of — your databases.
+key: files
+---
 # Files
 
 A backup can include files and folders from your project alongside — or instead

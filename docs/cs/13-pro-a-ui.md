@@ -1,3 +1,8 @@
+---
+title: Pro a UI dashboard
+description: "Backup Manager je open-core: free balíček nyoncode/laravel-backup-manager je sám o sobě kompletní zálohovací nástroj s CLI."
+key: pro-and-ui
+---
 # Pro a UI dashboard
 
 Backup Manager je **open-core**: free balíček `nyoncode/laravel-backup-manager`

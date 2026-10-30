@@ -1,3 +1,8 @@
+---
+title: Installation
+description: "Backup Manager installs like any other Laravel package: require it with Composer, publish the config file, and you can run your first backup right away."
+key: installation
+---
 # Installation
 
 Backup Manager installs like any other Laravel package: require it with Composer,

@@ -1,3 +1,8 @@
+---
+title: AI assistants (MCP)
+description: "Setting up backups is a small pile of decisions — what to include, where to send it, how to encrypt it, how long to keep it — and every one of them is easy…"
+key: mcp
+---
 # AI assistants (MCP)
 
 Setting up backups is a small pile of decisions — what to include, where to send
