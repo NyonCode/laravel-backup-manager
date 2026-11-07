@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nyoncode\BackupManager;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Container\Container as CurrentContainer;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -34,6 +35,9 @@ use Nyoncode\BackupManager\Contracts\Notification\NotificationChannel;
 use Nyoncode\BackupManager\Contracts\Snapshot\SnapshotDriver;
 use Nyoncode\BackupManager\Contracts\Storage\BackupRepository;
 use Nyoncode\BackupManager\DTOs\RetentionPolicy;
+use Nyoncode\BackupManager\Events\BackupCompleted;
+use Nyoncode\BackupManager\Events\BackupFailed;
+use Nyoncode\BackupManager\Events\BackupStarted;
 use Nyoncode\BackupManager\Exceptions\IntegrityException;
 use Nyoncode\BackupManager\Listeners\LogsBackupActivity;
 use Nyoncode\BackupManager\Listeners\SendBackupNotifications;
@@ -119,9 +123,15 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
             // Subscribe the activity/notification listeners and register the
             // schedule once the package has fully booted.
             ->bootedPackage(function (): void {
+                // Listened to by class and method, not subscribe()d: subscribing
+                // builds the listener on the spot, and with it the notifier and
+                // its channels — on every PHP-FPM request, for an event that
+                // rarely fires. Built when the event fires instead.
                 $events = $this->app->make(Dispatcher::class);
-                $events->subscribe(LogsBackupActivity::class);
-                $events->subscribe(SendBackupNotifications::class);
+                $events->listen(BackupStarted::class, [LogsBackupActivity::class, 'handleStarted']);
+                $events->listen(BackupCompleted::class, [LogsBackupActivity::class, 'handleCompleted']);
+                $events->listen(BackupFailed::class, [LogsBackupActivity::class, 'handleFailed']);
+                $events->listen(BackupFailed::class, [SendBackupNotifications::class, 'handleFailed']);
 
                 $this->registerSchedule();
             });
@@ -241,12 +251,19 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
         // the provider order.
         $this->app->tag(MailChannel::class, self::NOTIFICATION_CHANNELS);
 
-        $this->app->singleton(BackupNotifier::class, function ($app): BackupNotifier {
-            /** @var iterable<NotificationChannel> $channels */
-            $channels = $app->tagged(self::NOTIFICATION_CHANNELS);
-
-            return new BackupNotifier($app->make(Repository::class), $channels);
-        });
+        // Config and channels are resolved on every notification, through the
+        // container current at that moment: under a long-lived worker (Octane)
+        // that is the running request's, so a channel reads the request's config
+        // and sends through its mailer. Under PHP-FPM it is the one application.
+        // Not a singleton: it holds nothing worth sharing, and a shared instance
+        // is one more object a worker keeps for its whole life.
+        $this->app->bind(BackupNotifier::class, fn (): BackupNotifier => new BackupNotifier(
+            config: static fn (): Repository => CurrentContainer::getInstance()->make(Repository::class),
+            channels: static function (): iterable {
+                /** @var iterable<NotificationChannel> */
+                return CurrentContainer::getInstance()->tagged(self::NOTIFICATION_CHANNELS);
+            },
+        ));
     }
 
     private function registerManagers(): void

@@ -5,6 +5,22 @@ All notable changes to `nyoncode/laravel-backup-manager` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1]
+
+### Fixed
+
+- **Notifications read the configuration the worker booted with, under Octane.**
+  Subscribing the listeners at boot built `SendBackupNotifications`, and with it
+  the `BackupNotifier` singleton and its mail channel, each holding the config
+  repository (and mailer) of the moment the application booted. Under a
+  long-lived worker that is one object for the worker's whole life, so a
+  notification read the worker's config instead of the running request's. The
+  notifier now resolves config and channels through the current container on
+  every use, and the listeners are registered by class and method, so nothing is
+  built at boot — which also takes the notifier off every PHP-FPM request's boot.
+  `new BackupNotifier($config, $channels)` still works; both arguments may now be
+  closures.
+
 ## [1.3.0]
 
 ### Fixed
