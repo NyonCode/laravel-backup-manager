@@ -174,7 +174,7 @@ final class RestoreManager
         }
 
         $decrypted = $workspace->path('decrypted');
-        // The pre-1.3 CBC format carries no tag, so a modified archive in it
+        // The pre-1.4 CBC format carries no tag, so a modified archive in it
         // decrypts into modified plaintext. Accepted only when something else
         // authenticates the backup — a verified signature — or the operator
         // says so. The manifest's own schema version cannot decide this: an
@@ -487,7 +487,7 @@ final class RestoreManager
     }
 
     /**
-     * Whether the unauthenticated pre-1.3 CBC format may be decrypted: for an
+     * Whether the unauthenticated pre-1.4 CBC format may be decrypted: for an
      * authenticated backup, or when the operator opted in.
      */
     public static function legacyCbcAllowed(Repository $config, bool $authenticated): bool

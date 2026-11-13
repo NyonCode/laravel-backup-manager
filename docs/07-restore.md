@@ -69,7 +69,7 @@ BACKUP_RESTORE_CONFINE=false php artisan backup:restore
 > cannot change this key over [MCP](14-mcp.md).
 
 File permissions are recorded too (manifest schema 1.3, `files[].mode`) and
-restored with each file. Backups made before 1.3 have no recorded mode and
+restored with each file. Backups made before 1.4 have no recorded mode and
 restore with default permissions.
 
 ## Unsigned database dumps
@@ -178,4 +178,4 @@ restoring onto an existing schema is idempotent.
 
 Before the client runs, the dump is inspected. One that carries `mysql`/`psql`
 client commands (`\!`, `system`, `source`, …) is refused with a
-`RestoreException` — see [Security](06-security.md#hardening-in-13).
+`RestoreException` — see [Security](06-security.md#hardening-in-14).

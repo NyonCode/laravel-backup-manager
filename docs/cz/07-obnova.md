@@ -67,7 +67,7 @@ BACKUP_RESTORE_CONFINE=false php artisan backup:restore
 > klíč přes [MCP](14-mcp.md) změnit nemůže.
 
 Zaznamenávají se i oprávnění souborů (schéma manifestu 1.3, `files[].mode`) a
-s každým souborem se obnovují. Zálohy vytvořené před 1.3 mód zaznamenaný nemají
+s každým souborem se obnovují. Zálohy vytvořené před 1.4 mód zaznamenaný nemají
 a obnoví se s výchozími oprávněními.
 
 ## Nepodepsané dumpy databází
@@ -171,4 +171,4 @@ obnova nad existujícím schématem je idempotentní.
 
 Před spuštěním klienta se dump zkontroluje. Dump, který nese příkazy klienta
 `mysql`/`psql` (`\!`, `system`, `source`, …), se odmítne s `RestoreException` —
-viz [Zabezpečení](06-zabezpeceni.md#zpřísnění-v-13).
+viz [Zabezpečení](06-zabezpeceni.md#zpřísnění-v-14).

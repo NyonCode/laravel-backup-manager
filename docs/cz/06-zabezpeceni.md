@@ -148,7 +148,7 @@ automaticky (vypnete přes `--no-verify`). Při zapnutém podepisování selže
 ověření manifestu, který **žádný** podpis nenese — stejné pravidlo platí při
 obnově, protože odstranění podpisu je nejlevnější způsob, jak se mu vyhnout.
 
-## Zpřísnění v 1.3
+## Zpřísnění v 1.4
 
 Chování, které dostanete bez jakéhokoli nastavení:
 
@@ -180,7 +180,7 @@ Chování, které dostanete bez jakéhokoli nastavení:
   dešifruje jediný bajt. Nic se nenastavuje. Algoritmus uvedený v hlavičce
   archivu se také musí shodovat s manifestem, jinak se dešifrování odmítne.
 
-  Archivy z doby před 1.3 (hlavička s id 1) se stále dešifrují, se zapsaným
+  Archivy z doby před 1.4 (hlavička s id 1) se stále dešifrují, se zapsaným
   varováním. Nic je neautentizuje — před padělkem nebo downgradem je chrání jen
   podepisování v Pro.
 
@@ -215,7 +215,7 @@ Chování, které dostanete bez jakéhokoli nastavení:
   odkaz, který už na disku je, ani odkaz ze zálohy. Povolené cesty určuje profil,
   pro který obnovujete (`backup:restore --profile=…`, profil v dashboardu);
   záloha, jejíž manifest uvádí jiný profil, se odmítne.
-- **Starý formát CBC (před 1.3) vyžaduje ověření.** Archivy a bloby snapshotů v
+- **Starý formát CBC (před 1.4) vyžaduje ověření.** Archivy a bloby snapshotů v
   něm se dešifrují jen u podepsané zálohy, nebo s
   `backup:restore --allow-legacy-cbc` (`BACKUP_ALLOW_LEGACY_CBC=true`, přes MCP
   nenastavitelné) — přepsaný archiv se nemůže vydávat za starý.

@@ -95,7 +95,7 @@ chráněné.
 > repozitáři. Jejich změna nechá dřívější bloby nečitelné pro pozdější snapshoty,
 > které očekávají nové nastavení.
 
-Od 1.3 to pool vynucuje. Je **připnutý** ke své kompresi, šifrování a otisku
+Od 1.4 to pool vynucuje. Je **připnutý** ke své kompresi, šifrování a otisku
 klíče (HMAC klíče, nikdy klíč samotný) v `{path}/.snapshot-pool.json` a snapshot
 s jiným nastavením se odmítne s `SnapshotPoolException`, ještě než se cokoli
 zapíše. Chcete-li změnit kódování nebo rotovat klíč, nasměrujte profil na nový
@@ -108,7 +108,7 @@ zapíše. Chcete-li změnit kódování nebo rotovat klíč, nasměrujte profil 
 ],
 ```
 
-Pool z doby před 1.3 se převezme z nejnovějšího manifestu. Klíč převzatého
+Pool z doby před 1.4 se převezme z nejnovějšího manifestu. Klíč převzatého
 šifrovaného poolu nelze dodatečně ověřit, proto se zaznamená aktuální klíč.
 
 ## Retence a garbage collection

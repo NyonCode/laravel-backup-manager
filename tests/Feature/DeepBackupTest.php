@@ -505,7 +505,7 @@ it('removes a link whose target leaves the profile only when the kernel resolves
 });
 
 /**
- * Rewrite a stored CBC archive into the untagged pre-1.3 format, as someone
+ * Rewrite a stored CBC archive into the untagged pre-1.4 format, as someone
  * with write access to the bucket could, fixing up the unsigned manifest.
  */
 function downgradeToLegacyCbc(StoredBackup $backup, string $key): void

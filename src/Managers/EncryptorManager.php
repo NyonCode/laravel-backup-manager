@@ -21,9 +21,9 @@ final class EncryptorManager
     ) {}
 
     /**
-     * @param  bool  $allowLegacyCbc  Whether a pre-1.3, unauthenticated CBC archive may
-     *                                be decrypted. Callers that know the archive was written
-     *                                by 1.3 or later pass false, so it cannot be downgraded.
+     * @param  bool  $allowLegacyCbc  Whether a pre-1.4, unauthenticated CBC archive may
+     *                                be decrypted. Restore passes false unless the backup is
+     *                                authenticated or the operator opted in.
      */
     public function for(EncryptionAlgorithm $algorithm, bool $allowLegacyCbc = true): Encryptor
     {

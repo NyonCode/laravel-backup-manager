@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nyoncode\BackupManager\Services;
 
+use Closure;
 use Illuminate\Contracts\Config\Repository;
 use Nyoncode\BackupManager\Contracts\Notification\NotificationChannel;
 
@@ -15,15 +16,22 @@ use Nyoncode\BackupManager\Contracts\Notification\NotificationChannel;
  * more {@see NotificationChannel}s and dispatching through {@see notify()}.
  * Whether an event notifies at all is gated by config; individual channels
  * deliver best-effort and never let a send failure escape.
+ *
+ * Config and channels may be given as closures, read on every use rather than
+ * once. That is how the container builds it: a long-lived worker (Octane) keeps
+ * this singleton for its whole life, and a closure resolving through the
+ * current container reads the running request's config and mailer, not the
+ * ones the worker booted with.
  */
 final class BackupNotifier
 {
     /**
-     * @param  iterable<NotificationChannel>  $channels
+     * @param  Repository|Closure(): Repository  $config
+     * @param  iterable<NotificationChannel>|Closure(): iterable<NotificationChannel>  $channels
      */
     public function __construct(
-        private readonly Repository $config,
-        private readonly iterable $channels,
+        private readonly Repository|Closure $config,
+        private readonly iterable|Closure $channels,
     ) {}
 
     public function failure(string $profile, string $error): void
@@ -43,7 +51,9 @@ final class BackupNotifier
      */
     public function notify(string $subject, string $body): void
     {
-        foreach ($this->channels as $channel) {
+        $channels = $this->channels instanceof Closure ? ($this->channels)() : $this->channels;
+
+        foreach ($channels as $channel) {
             $channel->send($subject, $body);
         }
     }
@@ -53,10 +63,12 @@ final class BackupNotifier
      */
     public function shouldNotify(string $event): bool
     {
-        if (! $this->config->get('backup-manager.monitoring.notifications.enabled', true)) {
+        $config = $this->config instanceof Closure ? ($this->config)() : $this->config;
+
+        if (! $config->get('backup-manager.monitoring.notifications.enabled', true)) {
             return false;
         }
 
-        return in_array($event, (array) $this->config->get('backup-manager.monitoring.notifications.on', []), true);
+        return in_array($event, (array) $config->get('backup-manager.monitoring.notifications.on', []), true);
     }
 }

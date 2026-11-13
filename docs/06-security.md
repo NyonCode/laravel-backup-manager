@@ -148,7 +148,7 @@ enabled, a manifest that carries **no** signature fails verification — the sam
 rule restore applies, since stripping the signature is the cheapest way to dodge
 it.
 
-## Hardening in 1.3
+## Hardening in 1.4
 
 Behaviour you get without configuring anything:
 
@@ -180,7 +180,7 @@ Behaviour you get without configuring anything:
   There is nothing to configure. The algorithm named in the archive header must
   also match the manifest's, or decryption is refused.
 
-  Archives written before 1.3 (header id 1) still decrypt, with a logged
+  Archives written before 1.4 (header id 1) still decrypt, with a logged
   warning. Nothing authenticates them — only Pro signing protects those against
   forgery or downgrade.
 
@@ -215,7 +215,7 @@ Behaviour you get without configuring anything:
   a link in the backup can carry a write outside the profile. The include paths
   come from the profile you restore for (`backup:restore --profile=…`, the
   dashboard's profile); a backup whose manifest names another profile is refused.
-- **The untagged pre-1.3 CBC format needs authentication.** Archives and
+- **The untagged pre-1.4 CBC format needs authentication.** Archives and
   snapshot blobs in it are decrypted only for a signed backup, or with
   `backup:restore --allow-legacy-cbc` (`BACKUP_ALLOW_LEGACY_CBC=true`, not
   writable over MCP) — a rewritten archive cannot pass itself off as an old one.

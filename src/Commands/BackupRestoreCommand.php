@@ -30,7 +30,7 @@ final class BackupRestoreCommand extends Command
         {--unsafe : Skip the pre-restore snapshot / rollback safety net}
         {--allow-outside : Restore files and links to their recorded paths even outside the current include paths of the profile}
         {--trust-unsigned-dump : Restore an unsigned database dump even through a client that cannot switch its own commands off}
-        {--allow-legacy-cbc : Decrypt a pre-1.3, unauthenticated AES-256-CBC archive or snapshot without a verified signature}
+        {--allow-legacy-cbc : Decrypt a pre-1.4, unauthenticated AES-256-CBC archive or snapshot without a verified signature}
         {--force : Do not ask for confirmation}';
 
     protected $description = 'Restore a backup';
@@ -63,7 +63,7 @@ final class BackupRestoreCommand extends Command
 
         if ($this->option('allow-legacy-cbc')) {
             config()->set('backup-manager.encryption.allow_legacy_cbc', true);
-            $this->components->warn('Accepting the unauthenticated pre-1.3 CBC format for this restore.');
+            $this->components->warn('Accepting the unauthenticated pre-1.4 CBC format for this restore.');
         }
 
         if ($this->option('trust-unsigned-dump')) {

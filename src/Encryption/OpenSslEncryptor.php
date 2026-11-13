@@ -20,7 +20,7 @@ use Nyoncode\BackupManager\Support\EncryptionKey;
  * 2 = AES-256-GCM, 3 = AES-256-CBC with an HMAC-SHA256 tag (encrypt-then-MAC).
  *
  * CBC is streamed block-by-block so arbitrarily large archives encrypt with
- * flat memory. Since 1.3 it is also authenticated: the HMAC covers the header,
+ * flat memory. Since 1.4 it is also authenticated: the HMAC covers the header,
  * the IV and the ciphertext, sits at the end so encryption stays a single
  * pass, and is checked in full *before* a byte is decrypted — a tampered
  * archive is refused rather than decrypted into something plausible, and no
@@ -51,7 +51,7 @@ final class OpenSslEncryptor implements Encryptor
          */
         private readonly ?int $maxGcmBytes = null,
         /**
-         * Whether the unauthenticated pre-1.3 CBC format (id 1) is accepted on
+         * Whether the unauthenticated pre-1.4 CBC format (id 1) is accepted on
          * decrypt. Off when the archive is known to be newer: stripping the tag
          * and flipping the id byte must not turn an authenticated archive into
          * one that is decrypted unchecked.
@@ -212,7 +212,7 @@ final class OpenSslEncryptor implements Encryptor
         fclose($in);
 
         throw EncryptionException::cipherFailed(
-            'This archive is in the unauthenticated pre-1.3 CBC format, which cannot prove it was not modified. '
+            'This archive is in the unauthenticated pre-1.4 CBC format, which cannot prove it was not modified. '
             .'It is restored only from a signed backup, or with `backup:restore --allow-legacy-cbc` '
             .'(BACKUP_ALLOW_LEGACY_CBC=true) if you trust it.'
         );
@@ -229,11 +229,11 @@ final class OpenSslEncryptor implements Encryptor
      */
     private function decryptCbcLegacy($in, EncryptionAlgorithm $algorithm, string $destination): void
     {
-        // Written before 1.3, with nothing to authenticate it by. Still
+        // Written before 1.4, with nothing to authenticate it by. Still
         // restorable — refusing would strand every older encrypted backup —
         // but only Pro manifest signing can tell such a file from a forgery.
         try {
-            logger()->warning('[backup-manager] Decrypting an unauthenticated (pre-1.3) AES-256-CBC archive; enable manifest signing to detect tampering.');
+            logger()->warning('[backup-manager] Decrypting an unauthenticated (pre-1.4) AES-256-CBC archive; enable manifest signing to detect tampering.');
         } catch (\Throwable) {
             // A warning is never a reason to fail a restore.
         }

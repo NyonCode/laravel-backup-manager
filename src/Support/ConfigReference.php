@@ -233,7 +233,7 @@ final class ConfigReference
             new ConfigOption(
                 key: 'encryption.allow_legacy_cbc',
                 type: 'boolean',
-                description: 'Decrypt pre-1.3, unauthenticated AES-256-CBC archives and snapshot blobs of an unsigned backup. Off: such a backup restores only when signed, or with `backup:restore --allow-legacy-cbc`.',
+                description: 'Decrypt pre-1.4, unauthenticated AES-256-CBC archives and snapshot blobs of an unsigned backup. Off: such a backup restores only when signed, or with `backup:restore --allow-legacy-cbc`.',
                 env: 'BACKUP_ALLOW_LEGACY_CBC',
                 default: false,
                 guarded: true,

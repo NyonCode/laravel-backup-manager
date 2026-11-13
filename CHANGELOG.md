@@ -5,37 +5,46 @@ All notable changes to `nyoncode/laravel-backup-manager` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.3.0] - 2026-11-13
+## [1.4.0] - 2026-11-13
 
 ### Upgrade notes
 
-- **Encrypted (AES-256-CBC) backups written before 1.3 restore only when signed,
+- **Encrypted (AES-256-CBC) backups written before 1.4 restore only when signed,
   or with `backup:restore --allow-legacy-cbc`.** They carry no authentication
   tag, so nothing else can show they were not modified. `backup:verify` still
   reads them.
+
 - **Restoring a database from an unsigned backup needs a client that locks
   down** (MariaDB 10.5.25+/11.x, MySQL 8.4.6+, psql 13.22/14.19/15.14/16.10/
   17.6+) — or signed backups, or `backup:restore --trust-unsigned-dump`.
   Otherwise the restore is refused with instructions. Files-only restores are
   unaffected.
+
 - **`RestoreManager::restore()` takes the profile being restored for** as an
   optional third argument; pass it so confinement uses that profile's include
   paths and a backup from another profile is refused.
-- **Encrypted archives written by 1.3 cannot be read by older versions.** New
+
+- **Encrypted archives written by 1.4 cannot be read by older versions.** New
   AES-256-CBC archives carry an authentication tag (header id `3`); restore them
-  with 1.3 or later. Archives from earlier versions keep restoring.
+  with 1.4 or later. Archives from earlier versions keep restoring.
+
 - **Restore is confined to the profile's include paths by default.** A backup
   whose files lie elsewhere (the app moved, a new release directory, a renamed
   profile) is refused until you run `backup:restore --allow-outside` or set
   `BACKUP_RESTORE_CONFINE=false`.
+
 - **Restore aborts when its safety net cannot be taken** (pre-restore database
   dump or file copy). `--unsafe` remains the deliberate opt-out.
+
 - **`backup:verify` fails unsigned backups while signing is enabled** — backups
   taken before signing was turned on now report a missing signature.
+
 - **Only scheduled profiles run on a schedule.** Non-default profiles need their
   own `profiles.*.schedule`; the default profile keeps using `schedule.backup`.
+
 - **Listings ignore files not named like this package's archives.** Rename or
   remove anything you were relying on being counted as a backup.
+
 - Manifest schema is now `1.3` (adds `files[].mode`); older manifests read and
   verify unchanged.
 
@@ -46,6 +55,215 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   threshold from). `profiles.*.monitoring.max_backup_age_hours` overrides the
   derived threshold per profile. `ConfigValidator` checks per-profile cron
   expressions, thresholds and signing keys, and reports profiles nothing schedules.
+
+### Fixed
+
+- **Only the default profile was ever scheduled.** `backup:run` and
+  `backup:clean` were registered without `--profile`, so every other profile was
+  neither backed up nor cleaned by the scheduler. Profiles now take their own
+  cron expression (`profiles.*.schedule`); the default profile keeps falling
+  back to `schedule.backup` and keeps its bare command. Retention is scheduled
+  for every scheduled profile (and, as before, for the default profile).
+
+- **Retention could delete every backup.** When backups had been failing for
+  longer than `max_age_days` — or the newest one alone exceeded the storage cap —
+  the keep-set came out empty and everything was pruned. The newest backup now
+  always survives.
+
+### Security
+
+- **An unsigned database dump is restored only through a locked-down client.**
+  Inspecting a dump's text cannot rule out every way a tampered one reaches
+  mysql's or psql's own commands (a function or trigger the dump defines can
+  change how the client reads the rest). A dump is now restored only when the
+  backup is signed and verified, or when the client refuses its own commands:
+  MariaDB `--sandbox`, MySQL 8.4.6+ `--commands=OFF`, or psql 13.22 / 14.19 /
+  15.14 / 16.10 / 17.6+ running the dump inside a `\restrict` whose key only
+  the restore knows. Otherwise the restore is refused before anything changes;
+  `backup:restore --trust-unsigned-dump` (or
+  `BACKUP_RESTORE_TRUST_UNSIGNED_DUMPS=true`, not writable over MCP) restores a
+  dump you trust. Restorers declare the capability through
+  `Contracts\Database\LocksDownClient`.
+
+- **Restore confinement resolves real paths and trusts the caller's profile.**
+  Paths are compared after resolving every symlink on the host, and links are
+  recreated only after all regular files, so neither an existing link nor a
+  chain of links in the backup can carry a write outside the profile. The
+  include paths come from the profile being restored for
+  (`RestoreManager::restore(…, $profile)`, passed by `backup:restore` and the
+  dashboard); a manifest naming another profile is refused.
+
+- **The untagged pre-1.4 CBC format is decrypted only for an authenticated
+  backup.** Archives (and, in Pro, snapshot blobs) in it are accepted when the
+  backup's signature verified, or with `backup:restore --allow-legacy-cbc` /
+  `BACKUP_ALLOW_LEGACY_CBC=true` (not writable over MCP). The manifest's schema
+  version cannot decide this: an unsigned manifest is exactly what an attacker
+  rewrites.
+
+- **A restored symbolic link is resolved the kernel's way before it is kept.**
+  After it is created, its real path must lie inside the profile — `s -> .`
+  makes `s/../x` leave the root although it reads as inside — and an
+  unresolvable target that climbs with `..` is removed too.
+
+- **The dump inspector reads statements, not lines.** Statement ends,
+  `DELIMITER` and `COPY … FROM stdin` come from the lexer; every mysql named
+  command is refused where the client would run it; and a dump is refused when
+  it changes how the client reads strings (`NO_BACKSLASH_ESCAPES`,
+  `ANSI_QUOTES`, a `sql_mode` from anything but a literal or mysqldump's saved
+  value, `standard_conforming_strings` off, a multibyte client character set).
+  `\connect` may only name a database; `E'…'` is only an escape string as a
+  prefix. These checks are allow-lists: a statement touching `sql_mode`, a
+  client character set, `standard_conforming_strings` or `client_encoding`
+  passes only in the exact forms mysqldump and pg_dump write (encodings
+  compared the way PostgreSQL normalises their names). Every statement of a
+  `DELIMITER` batch is judged on its own, quoted identifiers count as the
+  names they spell, PostgreSQL settings are found in DO bodies and literals
+  too, and `PREPARE`, `EXECUTE`, `CALL` and `… INTO @var` are refused.
+
+- **MCP: keys are set-once and protections cannot be switched off.** An
+  encryption or signing key can be set while none is in effect — the signing
+  key counts as set while it falls back to the encryption key — never replaced, and
+  encryption or signing that is on cannot be turned off through the assistant.
+
+- **Restore writes files only inside the profile.** A restore whose manifest
+  holds a file outside the profile's current `files.include` paths — a tampered
+  manifest aiming at `~/.ssh` or `/etc`, or an app that has since moved — is
+  refused before anything is downloaded or changed, naming the paths (and the
+  profile, when it is no longer configured). Roots reached through symlinks are
+  matched by their resolved path too, and an include of `/` works. For a trusted
+  backup whose paths moved, run `backup:restore --allow-outside` once, or set
+  `restore.confine_to_include_paths` (`BACKUP_RESTORE_CONFINE`) to `false`; the
+  assistant cannot change it. Symbolic links follow the same setting.
+
+- **A rollback no longer claims success it did not have.** Files are put back
+  through a temp file and a rename (a restored read-only file used to block the
+  copy silently), and when any rollback step fails the error says the rollback
+  was incomplete and lists what to check.
+
+- **A restored SQLite database keeps the live file's mode and, when restoring as
+  root, its owner** — a root restore no longer leaves the app with a read-only
+  database.
+
+- **Restored files keep their permissions.** The manifest (schema `1.3`) records
+  each file's mode, and restore applies it before the file is moved into place,
+  so a `.env` or private key no longer comes back world-readable. Rollback puts
+  modes back too. Older manifests are unchanged byte for byte, so their
+  signatures still verify.
+
+- **SQLite backups are consistent in WAL mode.** The database is now captured
+  with `VACUUM INTO`, which includes committed pages still in the write-ahead
+  log; a plain file copy missed them. Restore swaps the file in atomically and
+  removes the replaced database's stale `-wal`/`-shm`, which SQLite would
+  otherwise replay over the restored data.
+
+- **Bounded memory on restore.** GCM decryption refuses archives over
+  `gcm_max_megabytes` (as encryption already did), a tar long-name record over
+  64 KiB is refused, and an overflowing base-256 size field is rejected.
+
+- **`backup:upgrade` refuses to send the licence token over plain HTTP**, reads
+  it from `BACKUP_PRO_TOKEN` or a prompt, and warns when it was passed as an
+  argument (and so sits in the shell history).
+
+- **AES-256-CBC archives are now authenticated (encrypt-then-MAC).** New CBC
+  archives carry an HMAC-SHA256 tag (header id `3`) over the header, IV and
+  ciphertext, keyed by an HKDF-derived subkey of the encryption key — nothing
+  new to configure. The tag is checked in full before a byte is decrypted, so a
+  modified archive is refused instead of decrypted into something plausible, and
+  no padding error is reachable on unauthenticated input. Archives written
+  before 1.4 (id `1`) still decrypt, with a logged warning; only manifest
+  signing (Pro) can tell those from a forgery. The algorithm in an archive's
+  header must now match the one expected from its manifest. **Downgrade note:**
+  versions before 1.4 cannot decrypt CBC archives written by 1.4.
+
+- **Restored dumps can no longer run client commands.** `mysql` and `psql` act
+  on more than SQL — `\! cmd` runs a shell command, `source`/`\i` read files,
+  `tee`/`\o` write them — so a tampered dump turned write access to backup
+  storage into code execution on the app host. Dumps are now lexed before
+  import (strings, comments, dollar quotes and `COPY` data understood) and
+  refused when they carry any client command the dumpers never write. The
+  MySQL/MariaDB client additionally gets `--sandbox` or `--system-command=OFF`
+  when it supports them.
+
+- **A restore no longer proceeds without its safety net.** When the
+  pre-restore snapshot of a database cannot be taken (timeout, full disk,
+  missing client) — or a file cannot be copied aside — the restore now aborts
+  before changing anything, instead of overwriting with no way back. A database
+  that does not exist yet is still skipped; `--unsafe` remains the deliberate
+  opt-out.
+
+- **Strangers' files are never treated as backups.** Listings admit only file
+  names this package writes (`{profile}-{Y-m-d-His}-{hex}.tar…`), so a file
+  someone else keeps in the same directory — or a whole bucket when `path` is
+  empty — is neither counted nor pruned by retention.
+
+- **Restore no longer recreates symbolic links that leave the profile.** A link's
+  target comes from the plaintext (and, without Pro signing, unauthenticated)
+  manifest, so a tampered manifest could plant `public/r -> /` in a web root.
+  A link is now recreated only when its target resolves inside the profile's
+  current `files.include` paths; anything else is skipped, logged, listed in
+  `RestoreResult::$skippedLinks` and printed by `backup:restore`.
+  Manifest paths are normalised before `--only` matching (so `app/../../etc`
+  cannot slip past a selective restore), and archive entries are read from the
+  extract directory through `SafePath`.
+
+- **The MCP server can no longer widen its own access.** `backup_configure`
+  refuses `mcp.*`, `binaries.*`, `pro.*` and `working_directory` — keys that
+  decide what the assistant may do, which programs run, where the licence token
+  is sent and where plaintext dumps are staged — even with `force`.
+
+- **`.env` values are written without variable expansion.** A value containing
+  `$` was double-quoted, which phpdotenv expands: `https://x/?k=${APP_KEY}` would
+  have mailed the app key to whoever owns the URL. Such values are now
+  single-quoted, and ones that cannot be written literally are refused.
+
+- **Table names that read as options are refused.** `schema_only_tables` reach
+  `mysqldump` positionally; a name starting with `-` (or holding control
+  characters) now fails profile resolution.
+
+- **Manifest digests must be hexadecimal.** A digest also addresses a blob in
+  the pool, so `../../x` is refused instead of being used as a path.
+
+- **Failed backups no longer leave plaintext dumps behind.** The workspace is
+  removed when the pipeline throws, and it is created owner-only (`0700`).
+
+- **`backup:verify` fails an unsigned manifest when signing is enabled**, the
+  same rule restore already enforced; stripping the signature no longer makes a
+  backup "pass". The CLI says *missing* rather than *invalid* for such a backup
+  (`VerificationResult::unsigned()`).
+
+## [1.3.1] - 2026-11-07
+
+### Fixed
+
+- **Notifications read the configuration the worker booted with, under Octane.**
+  Subscribing the listeners at boot built `SendBackupNotifications`, and with it
+  the `BackupNotifier` singleton and its mail channel, each holding the config
+  repository (and mailer) of the moment the application booted. Under a
+  long-lived worker that is one object for the worker's whole life, so a
+  notification read the worker's config instead of the running request's. The
+  notifier now resolves config and channels through the current container on
+  every use, and the listeners are registered by class and method, so nothing is
+  built at boot — which also takes the notifier off every PHP-FPM request's boot.
+  `new BackupNotifier($config, $channels)` still works; both arguments may now be
+  closures.
+
+## [1.3.0] - 2026-10-17
+
+### Fixed
+
+- **Retention judged every backup in the path, not the profile's own.**
+  `RetentionManager::apply()` listed the whole destination and deleted whatever
+  fell outside the keep-set, without ever asking which profile a backup belonged
+  to. Since `path` defaults to `backups` for every profile, two profiles sharing
+  a disk is the *default* arrangement — so a nightly `backup:clean` run under the
+  default profile's policy pruned the fortnightly full backups sitting beside it.
+  Nothing reported it; `keep_latest = 5` on the other profile simply never held.
+  Every stored backup now carries the profile from its manifest, and both
+  retention engines count and delete only their own. Backups whose manifest
+  predates the tag (or cannot be read) still count as the asking profile's, so an
+  upgrade keeps cleaning up exactly what it cleaned up before.
+
+### Added
 
 - **`backup:clean` can go to the queue**, symmetrically with `backup:run`: with
   `BACKUP_QUEUE=true` it dispatches the new `CleanBackupsJob` and `--sync` forces
@@ -77,175 +295,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged (null means "every backup in the path", the old behaviour); a custom
   `SnapshotDriver` implementation needs the new parameter in its signature.
 
+### Changed
+
 - Test suite moved to **Pest 4**, with Pest 5 supported alongside it
   (`^4.0|^5.0`). Which one is installed follows the environment: Pest 5 needs
   PHP 8.4 and Symfony 8, so a Laravel 12 install stays on Pest 4 and gets the
   newer major only with Laravel 13. Both were run against the full suite.
-
-### Fixed
-
-- **Only the default profile was ever scheduled.** `backup:run` and
-  `backup:clean` were registered without `--profile`, so every other profile was
-  neither backed up nor cleaned by the scheduler. Profiles now take their own
-  cron expression (`profiles.*.schedule`); the default profile keeps falling
-  back to `schedule.backup` and keeps its bare command. Retention is scheduled
-  for every scheduled profile (and, as before, for the default profile).
-- **Retention could delete every backup.** When backups had been failing for
-  longer than `max_age_days` — or the newest one alone exceeded the storage cap —
-  the keep-set came out empty and everything was pruned. The newest backup now
-  always survives.
-
-- **Retention judged every backup in the path, not the profile's own.**
-  `RetentionManager::apply()` listed the whole destination and deleted whatever
-  fell outside the keep-set, without ever asking which profile a backup belonged
-  to. Since `path` defaults to `backups` for every profile, two profiles sharing
-  a disk is the *default* arrangement — so a nightly `backup:clean` run under the
-  default profile's policy pruned the fortnightly full backups sitting beside it.
-  Nothing reported it; `keep_latest = 5` on the other profile simply never held.
-  Every stored backup now carries the profile from its manifest, and both
-  retention engines count and delete only their own. Backups whose manifest
-  predates the tag (or cannot be read) still count as the asking profile's, so an
-  upgrade keeps cleaning up exactly what it cleaned up before.
-
-### Security
-
-- **An unsigned database dump is restored only through a locked-down client.**
-  Inspecting a dump's text cannot rule out every way a tampered one reaches
-  mysql's or psql's own commands (a function or trigger the dump defines can
-  change how the client reads the rest). A dump is now restored only when the
-  backup is signed and verified, or when the client refuses its own commands:
-  MariaDB `--sandbox`, MySQL 8.4.6+ `--commands=OFF`, or psql 13.22 / 14.19 /
-  15.14 / 16.10 / 17.6+ running the dump inside a `\restrict` whose key only
-  the restore knows. Otherwise the restore is refused before anything changes;
-  `backup:restore --trust-unsigned-dump` (or
-  `BACKUP_RESTORE_TRUST_UNSIGNED_DUMPS=true`, not writable over MCP) restores a
-  dump you trust. Restorers declare the capability through
-  `Contracts\Database\LocksDownClient`.
-
-- **Restore confinement resolves real paths and trusts the caller's profile.**
-  Paths are compared after resolving every symlink on the host, and links are
-  recreated only after all regular files, so neither an existing link nor a
-  chain of links in the backup can carry a write outside the profile. The
-  include paths come from the profile being restored for
-  (`RestoreManager::restore(…, $profile)`, passed by `backup:restore` and the
-  dashboard); a manifest naming another profile is refused.
-- **The untagged pre-1.3 CBC format is decrypted only for an authenticated
-  backup.** Archives (and, in Pro, snapshot blobs) in it are accepted when the
-  backup's signature verified, or with `backup:restore --allow-legacy-cbc` /
-  `BACKUP_ALLOW_LEGACY_CBC=true` (not writable over MCP). The manifest's schema
-  version cannot decide this: an unsigned manifest is exactly what an attacker
-  rewrites.
-- **A restored symbolic link is resolved the kernel's way before it is kept.**
-  After it is created, its real path must lie inside the profile — `s -> .`
-  makes `s/../x` leave the root although it reads as inside — and an
-  unresolvable target that climbs with `..` is removed too.
-- **The dump inspector reads statements, not lines.** Statement ends,
-  `DELIMITER` and `COPY … FROM stdin` come from the lexer; every mysql named
-  command is refused where the client would run it; and a dump is refused when
-  it changes how the client reads strings (`NO_BACKSLASH_ESCAPES`,
-  `ANSI_QUOTES`, a `sql_mode` from anything but a literal or mysqldump's saved
-  value, `standard_conforming_strings` off, a multibyte client character set).
-  `\connect` may only name a database; `E'…'` is only an escape string as a
-  prefix. These checks are allow-lists: a statement touching `sql_mode`, a
-  client character set, `standard_conforming_strings` or `client_encoding`
-  passes only in the exact forms mysqldump and pg_dump write (encodings
-  compared the way PostgreSQL normalises their names). Every statement of a
-  `DELIMITER` batch is judged on its own, quoted identifiers count as the
-  names they spell, PostgreSQL settings are found in DO bodies and literals
-  too, and `PREPARE`, `EXECUTE`, `CALL` and `… INTO @var` are refused.
-- **MCP: keys are set-once and protections cannot be switched off.** An
-  encryption or signing key can be set while none is in effect — the signing
-  key counts as set while it falls back to the encryption key — never replaced, and
-  encryption or signing that is on cannot be turned off through the assistant.
-
-- **Restore writes files only inside the profile.** A restore whose manifest
-  holds a file outside the profile's current `files.include` paths — a tampered
-  manifest aiming at `~/.ssh` or `/etc`, or an app that has since moved — is
-  refused before anything is downloaded or changed, naming the paths (and the
-  profile, when it is no longer configured). Roots reached through symlinks are
-  matched by their resolved path too, and an include of `/` works. For a trusted
-  backup whose paths moved, run `backup:restore --allow-outside` once, or set
-  `restore.confine_to_include_paths` (`BACKUP_RESTORE_CONFINE`) to `false`; the
-  assistant cannot change it. Symbolic links follow the same setting.
-- **A rollback no longer claims success it did not have.** Files are put back
-  through a temp file and a rename (a restored read-only file used to block the
-  copy silently), and when any rollback step fails the error says the rollback
-  was incomplete and lists what to check.
-- **A restored SQLite database keeps the live file's mode and, when restoring as
-  root, its owner** — a root restore no longer leaves the app with a read-only
-  database.
-- **Restored files keep their permissions.** The manifest (schema `1.3`) records
-  each file's mode, and restore applies it before the file is moved into place,
-  so a `.env` or private key no longer comes back world-readable. Rollback puts
-  modes back too. Older manifests are unchanged byte for byte, so their
-  signatures still verify.
-- **SQLite backups are consistent in WAL mode.** The database is now captured
-  with `VACUUM INTO`, which includes committed pages still in the write-ahead
-  log; a plain file copy missed them. Restore swaps the file in atomically and
-  removes the replaced database's stale `-wal`/`-shm`, which SQLite would
-  otherwise replay over the restored data.
-- **Bounded memory on restore.** GCM decryption refuses archives over
-  `gcm_max_megabytes` (as encryption already did), a tar long-name record over
-  64 KiB is refused, and an overflowing base-256 size field is rejected.
-- **`backup:upgrade` refuses to send the licence token over plain HTTP**, reads
-  it from `BACKUP_PRO_TOKEN` or a prompt, and warns when it was passed as an
-  argument (and so sits in the shell history).
-- **AES-256-CBC archives are now authenticated (encrypt-then-MAC).** New CBC
-  archives carry an HMAC-SHA256 tag (header id `3`) over the header, IV and
-  ciphertext, keyed by an HKDF-derived subkey of the encryption key — nothing
-  new to configure. The tag is checked in full before a byte is decrypted, so a
-  modified archive is refused instead of decrypted into something plausible, and
-  no padding error is reachable on unauthenticated input. Archives written
-  before 1.3 (id `1`) still decrypt, with a logged warning; only manifest
-  signing (Pro) can tell those from a forgery. The algorithm in an archive's
-  header must now match the one expected from its manifest. **Downgrade note:**
-  versions before 1.3 cannot decrypt CBC archives written by 1.3.
-- **Restored dumps can no longer run client commands.** `mysql` and `psql` act
-  on more than SQL — `\! cmd` runs a shell command, `source`/`\i` read files,
-  `tee`/`\o` write them — so a tampered dump turned write access to backup
-  storage into code execution on the app host. Dumps are now lexed before
-  import (strings, comments, dollar quotes and `COPY` data understood) and
-  refused when they carry any client command the dumpers never write. The
-  MySQL/MariaDB client additionally gets `--sandbox` or `--system-command=OFF`
-  when it supports them.
-- **A restore no longer proceeds without its safety net.** When the
-  pre-restore snapshot of a database cannot be taken (timeout, full disk,
-  missing client) — or a file cannot be copied aside — the restore now aborts
-  before changing anything, instead of overwriting with no way back. A database
-  that does not exist yet is still skipped; `--unsafe` remains the deliberate
-  opt-out.
-- **Strangers' files are never treated as backups.** Listings admit only file
-  names this package writes (`{profile}-{Y-m-d-His}-{hex}.tar…`), so a file
-  someone else keeps in the same directory — or a whole bucket when `path` is
-  empty — is neither counted nor pruned by retention.
-- **Restore no longer recreates symbolic links that leave the profile.** A link's
-  target comes from the plaintext (and, without Pro signing, unauthenticated)
-  manifest, so a tampered manifest could plant `public/r -> /` in a web root.
-  A link is now recreated only when its target resolves inside the profile's
-  current `files.include` paths; anything else is skipped, logged, listed in
-  `RestoreResult::$skippedLinks` and printed by `backup:restore`.
-  Manifest paths are normalised before `--only` matching (so `app/../../etc`
-  cannot slip past a selective restore), and archive entries are read from the
-  extract directory through `SafePath`.
-- **The MCP server can no longer widen its own access.** `backup_configure`
-  refuses `mcp.*`, `binaries.*`, `pro.*` and `working_directory` — keys that
-  decide what the assistant may do, which programs run, where the licence token
-  is sent and where plaintext dumps are staged — even with `force`.
-- **`.env` values are written without variable expansion.** A value containing
-  `$` was double-quoted, which phpdotenv expands: `https://x/?k=${APP_KEY}` would
-  have mailed the app key to whoever owns the URL. Such values are now
-  single-quoted, and ones that cannot be written literally are refused.
-- **Table names that read as options are refused.** `schema_only_tables` reach
-  `mysqldump` positionally; a name starting with `-` (or holding control
-  characters) now fails profile resolution.
-- **Manifest digests must be hexadecimal.** A digest also addresses a blob in
-  the pool, so `../../x` is refused instead of being used as a path.
-- **Failed backups no longer leave plaintext dumps behind.** The workspace is
-  removed when the pipeline throws, and it is created owner-only (`0700`).
-- **`backup:verify` fails an unsigned manifest when signing is enabled**, the
-  same rule restore already enforced; stripping the signature no longer makes a
-  backup "pass". The CLI says *missing* rather than *invalid* for such a backup
-  (`VerificationResult::unsigned()`).
 
 ## [1.2.0] - 2026-08-22
 

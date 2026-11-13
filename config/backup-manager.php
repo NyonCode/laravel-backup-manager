@@ -161,7 +161,7 @@ return [
         // Use aes-256-cbc (streamed) for larger backups. null disables the cap.
         'gcm_max_megabytes' => (int) env('BACKUP_GCM_MAX_MB', 1024),
 
-        // AES-256-CBC archives and snapshot blobs written before 1.3 carry no
+        // AES-256-CBC archives and snapshot blobs written before 1.4 carry no
         // authentication tag. They are decrypted for a signed backup; for an
         // unsigned one only with this (or `backup:restore --allow-legacy-cbc`).
         'allow_legacy_cbc' => (bool) env('BACKUP_ALLOW_LEGACY_CBC', false),

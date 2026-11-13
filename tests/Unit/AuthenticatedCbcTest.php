@@ -67,7 +67,7 @@ it('refuses a truncated archive and the wrong key', function (): void {
         ->and(fn () => cbcEncryptor('base64:'.base64_encode(str_repeat('x', 32)))->decrypt($enc, cbcTemp()))->toThrow(EncryptionException::class);
 });
 
-it('still restores a pre-1.3 unauthenticated CBC archive', function (): void {
+it('still restores a pre-1.4 unauthenticated CBC archive', function (): void {
     $key = str_repeat('k', 32);
     $iv = random_bytes(16);
     $legacy = cbcTemp('BME1'.chr(1).$iv.openssl_encrypt('old archive', 'aes-256-cbc', $key, OPENSSL_RAW_DATA, $iv));

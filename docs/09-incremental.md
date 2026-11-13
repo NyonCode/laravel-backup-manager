@@ -95,7 +95,7 @@ deduplication is fully preserved and the bytes at rest are protected.
 > repository password. Changing them leaves earlier blobs unreadable by later
 > snapshots that expect the new setting.
 
-Since 1.3 the pool enforces this. It is **pinned** to its compression,
+Since 1.4 the pool enforces this. It is **pinned** to its compression,
 encryption and key fingerprint (an HMAC of the key, never the key) in
 `{path}/.snapshot-pool.json`, and a snapshot with different settings is refused
 with a `SnapshotPoolException` before anything is written. To change the
@@ -108,7 +108,7 @@ encoding or rotate the key, point the profile at a new `path`:
 ],
 ```
 
-A pool from before 1.3 is adopted from its newest manifest. The key of an
+A pool from before 1.4 is adopted from its newest manifest. The key of an
 adopted encrypted pool cannot be checked after the fact, so the current key is
 recorded.
 
