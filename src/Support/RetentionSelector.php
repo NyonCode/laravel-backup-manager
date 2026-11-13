@@ -52,6 +52,15 @@ final class RetentionSelector
             $keep = $this->storageEvictor->evict($keep, $policy);
         }
 
+        // Never retain nothing. The age cap empties the set when backups have
+        // been failing for longer than it (precisely when the last good one
+        // matters most), and a storage cap does when the newest backup alone
+        // is larger than it. Either way retention would delete every backup;
+        // the newest one always survives instead.
+        if ($keep === [] && $backups !== []) {
+            return [$backups[0]];
+        }
+
         return $keep;
     }
 

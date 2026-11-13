@@ -160,3 +160,15 @@ function mcpData(string $name, array $arguments = []): array
 {
     return (array) mcpTool($name, $arguments)['structuredContent'];
 }
+
+/** A stand-in client binary that prints $output for --help / --version. */
+function fakeClient(string $name, string $output): string
+{
+    $dir = sys_get_temp_dir().'/bm-client-'.uniqid();
+    mkdir($dir);
+    $path = "{$dir}/{$name}";
+    file_put_contents($path, "#!/bin/sh\ncat <<'OUT'\n{$output}\nOUT\n");
+    chmod($path, 0755);
+
+    return $path;
+}

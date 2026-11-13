@@ -20,7 +20,12 @@ final class EncryptorManager
         private readonly ?int $maxGcmBytes = null,
     ) {}
 
-    public function for(EncryptionAlgorithm $algorithm): Encryptor
+    /**
+     * @param  bool  $allowLegacyCbc  Whether a pre-1.3, unauthenticated CBC archive may
+     *                                be decrypted. Callers that know the archive was written
+     *                                by 1.3 or later pass false, so it cannot be downgraded.
+     */
+    public function for(EncryptionAlgorithm $algorithm, bool $allowLegacyCbc = true): Encryptor
     {
         if (! $algorithm->isEnabled()) {
             return new NullEncryptor;
@@ -30,6 +35,7 @@ final class EncryptorManager
             $algorithm,
             EncryptionKey::fromConfig($this->configuredKey),
             $this->maxGcmBytes,
+            $allowLegacyCbc,
         );
     }
 }

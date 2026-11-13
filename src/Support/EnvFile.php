@@ -83,12 +83,12 @@ final class EnvFile
                     continue;
                 }
 
-                $lines[$index] = $key.'='.$this->format($value);
+                $lines[$index] = $key.'='.$this->format($key, $value);
                 $replaced = true;
             }
 
             if (! $replaced) {
-                $append[] = $key.'='.$this->format($value);
+                $append[] = $key.'='.$this->format($key, $value);
             }
         }
 
@@ -172,7 +172,7 @@ final class EnvFile
     /**
      * Quote a value when a bare one would not survive a round trip.
      */
-    private function format(string $value): string
+    private function format(string $key, string $value): string
     {
         if ($value === '') {
             return '';
@@ -180,6 +180,23 @@ final class EnvFile
 
         if (preg_match('/^[A-Za-z0-9_.\/:@,+-]+$/', $value) === 1) {
             return $value;
+        }
+
+        // Control characters have no safe spelling in a .env line at all.
+        if (preg_match('/[\x00-\x09\x0B-\x1F\x7F]/', $value) === 1) {
+            throw ConfigWriteException::unsafeEnvValue($key);
+        }
+
+        // phpdotenv expands `${VAR}` inside double quotes (and bare values),
+        // so a written value such as `https://x/?k=${APP_KEY}` would carry the
+        // application's secrets to wherever it points. Single quotes are
+        // literal; a value that needs `$` and cannot be single-quoted is refused.
+        if (str_contains($value, '$')) {
+            if (str_contains($value, "'") || str_contains($value, "\n")) {
+                throw ConfigWriteException::unsafeEnvValue($key);
+            }
+
+            return "'".$value."'";
         }
 
         return '"'.str_replace(['\\', '"', "\n"], ['\\\\', '\\"', '\\n'], $value).'"';

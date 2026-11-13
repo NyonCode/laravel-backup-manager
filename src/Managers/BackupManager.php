@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Pipeline\Pipeline;
+use Nyoncode\BackupManager\Actions\Backup\CleanupWorkspace;
 use Nyoncode\BackupManager\Contracts\Backup\BackupStage;
 use Nyoncode\BackupManager\Contracts\Snapshot\SnapshotDriver;
 use Nyoncode\BackupManager\Enums\BackupMode;
@@ -68,6 +69,14 @@ final class BackupManager
             /** @var BackupContext $completed */
             $completed = $this->pipeline->send($context)->through($this->stagesFor($definition->mode))->thenReturn();
         } catch (Throwable $exception) {
+            // The cleanup stage is the last one and was never reached: without
+            // this, every failed run left its plaintext dumps on disk.
+            try {
+                CleanupWorkspace::remove($context->workspace);
+            } catch (Throwable) {
+                // Reporting the backup's own failure matters more.
+            }
+
             $this->events->dispatch(new BackupFailed($definition, $exception));
 
             throw $exception;
@@ -99,6 +108,8 @@ final class BackupManager
         // other on the destination. The timestamp remains parseable for sorting.
         $unique = substr(bin2hex(random_bytes(3)), 0, 6);
 
-        return trim($slug, '-').'-'.$startedAt->format('Y-m-d-His').'-'.$unique;
+        // A name of punctuation or non-Latin script slugs to nothing; without a
+        // fallback the archive would start with "-" and match no listing.
+        return (trim($slug, '-') ?: 'backup').'-'.$startedAt->format('Y-m-d-His').'-'.$unique;
     }
 }

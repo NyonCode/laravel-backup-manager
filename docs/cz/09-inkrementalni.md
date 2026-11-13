@@ -95,6 +95,22 @@ chráněné.
 > repozitáři. Jejich změna nechá dřívější bloby nečitelné pro pozdější snapshoty,
 > které očekávají nové nastavení.
 
+Od 1.3 to pool vynucuje. Je **připnutý** ke své kompresi, šifrování a otisku
+klíče (HMAC klíče, nikdy klíč samotný) v `{path}/.snapshot-pool.json` a snapshot
+s jiným nastavením se odmítne s `SnapshotPoolException`, ještě než se cokoli
+zapíše. Chcete-li změnit kódování nebo rotovat klíč, nasměrujte profil na nový
+`path`:
+
+```php
+'hourly' => [
+    'mode' => 'incremental',
+    'path' => 'backups-v2',   // nový pool s novým nastavením
+],
+```
+
+Pool z doby před 1.3 se převezme z nejnovějšího manifestu. Klíč převzatého
+šifrovaného poolu nelze dodatečně ověřit, proto se zaznamená aktuální klíč.
+
 ## Retence a garbage collection
 
 `backup:clean` prořezává snapshoty stejnou politikou jako archivy (GFS / simple +
@@ -120,6 +136,23 @@ je **fail-closed**: pokud nelze přečíst kterýkoli přeživší manifest, nes
 
 > `backup:clean` spouštějte, když **neběží** zálohy. Jako každý mark-and-sweep
 > collector předpokládá stabilní množinu snapshotů po dobu sweepu.
+
+Překryv, kterému se nevyhnete vždy, hlídají dvě pojistky:
+
+- **Zámek na pool.** Zápis snapshotu i sweep poolu drží cache zámek pro disk a
+  `path`, takže nikdy neběží současně. Zámek funguje napříč procesy jen na
+  sdíleném cache úložišti, například `redis` nebo `database`; na úložišti, které
+  zamykat neumí, běží bez ochrany. Běh čeká až 10 minut, pak skončí chybou „in
+  use“ a nic nezmění.
+- **Ochranná lhůta.** Sweep ponechá nereferencované bloby mladší než
+  `retention.blob_grace_hours` (výchozí 24), takže snapshot, který se právě
+  zapisuje, nikdy nepřijde o blob, na který se chystá odkázat.
+
+```php
+'retention' => [
+    'blob_grace_hours' => 24,
+],
+```
 
 ## Ověření a monitoring
 

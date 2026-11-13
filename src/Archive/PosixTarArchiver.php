@@ -18,6 +18,9 @@ use Nyoncode\BackupManager\Support\SafePath;
  */
 final class PosixTarArchiver implements Archiver
 {
+    /** Longest GNU long-name record accepted, in bytes. */
+    private const MAX_LONG_NAME = 65536;
+
     private const CHUNK = 1_048_576; // 1 MiB
 
     public function create(array $fileEntries, array $stringEntries, string $destination): void
@@ -183,6 +186,13 @@ final class PosixTarArchiver implements Archiver
             }
 
             if ($header['type'] === TarHeader::TYPE_LONGNAME) {
+                // Read into memory, so bounded: no file system has a path
+                // anywhere near this long, and an unbounded one is a way to
+                // exhaust memory with a crafted archive.
+                if ($header['size'] > self::MAX_LONG_NAME) {
+                    throw new BackupManagerException('Archive entry name is implausibly long; the archive is corrupt or crafted.');
+                }
+
                 $pendingName = rtrim($this->streamContent($in, $header['size'], null, capture: true), chr(0));
 
                 continue;

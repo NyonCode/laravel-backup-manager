@@ -62,12 +62,22 @@ final class VerifyManager
         }
     }
 
+    /**
+     * Null only when this installation does not sign at all. With a signer
+     * bound, a manifest without a signature fails — the same rule restore
+     * enforces: stripping the signature is the cheapest way to dodge it, and a
+     * verify that called that "passed" would vouch for a backup restore refuses.
+     */
     private function verifySignature(Manifest $manifest): ?bool
     {
+        if ($this->signer === null) {
+            return null;
+        }
+
         $signature = $manifest->signature;
 
-        if ($signature === null || $this->signer === null) {
-            return null;
+        if ($signature === null) {
+            return false;
         }
 
         return $this->signer->verify($manifest->withoutSignature()->toJson(), $signature);

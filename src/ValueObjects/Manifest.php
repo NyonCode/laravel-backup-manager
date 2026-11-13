@@ -37,8 +37,11 @@ final readonly class Manifest
      * 1.2 adds `migrations`, the schema state the backup was taken at; older
      * manifests without it are read back as null, meaning "not recorded" rather
      * than "none had run".
+     *
+     * 1.3 adds a file's permission bits (`files[].mode`), restored with it;
+     * entries without one keep whatever the restore creates them with.
      */
-    public const SCHEMA_VERSION = '1.2';
+    public const SCHEMA_VERSION = '1.3';
 
     /**
      * @param  list<DatabaseArtifact>  $databases

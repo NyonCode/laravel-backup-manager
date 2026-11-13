@@ -77,12 +77,39 @@ final class ProfileResolver
             $targets[] = DatabaseTarget::fromConnection(
                 connection: $connection,
                 config: $connectionConfig,
-                excludeTables: array_values((array) ($databases['exclude_tables'] ?? [])),
-                schemaOnlyTables: array_values((array) ($databases['schema_only_tables'] ?? [])),
+                excludeTables: $this->tableNames($databases['exclude_tables'] ?? [], 'exclude_tables'),
+                schemaOnlyTables: $this->tableNames($databases['schema_only_tables'] ?? [], 'schema_only_tables'),
             );
         }
 
         return $targets;
+    }
+
+    /**
+     * Table names, refused when one could be read as something else.
+     *
+     * They reach the dump binaries as arguments — `mysqldump` takes the
+     * schema-only tables positionally — so a name starting with `-` would be
+     * parsed as an option (`--result-file=…`, `--plugin-dir=…`). No real table
+     * needs a leading dash or a control character.
+     *
+     * @return list<string>
+     */
+    private function tableNames(mixed $tables, string $key): array
+    {
+        $names = [];
+
+        foreach ((array) $tables as $table) {
+            $table = (string) $table;
+
+            if ($table === '' || str_starts_with($table, '-') || preg_match('/[\x00-\x1F\x7F]/', $table) === 1) {
+                throw InvalidConfigurationException::unsafeTableName($key, $table);
+            }
+
+            $names[] = $table;
+        }
+
+        return $names;
     }
 
     /**

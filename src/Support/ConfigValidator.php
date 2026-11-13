@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nyoncode\BackupManager\Support;
 
+use Cron\CronExpression;
 use Illuminate\Contracts\Config\Repository;
 use Nyoncode\BackupManager\Contracts\Snapshot\SnapshotDriver;
 use Nyoncode\BackupManager\DTOs\BackupDefinition;
@@ -355,7 +356,7 @@ final class ConfigValidator
                 'encryption.algorithm',
                 $cap === null
                     ? 'aes-256-gcm buffers the whole archive in memory and no size cap is set.'
-                    : sprintf('aes-256-gcm buffers the whole archive in memory; archives above %d MB are refused.', (int) $cap),
+                    : sprintf('aes-256-gcm buffers the whole archive in memory; archives above %d MB are refused — on restore too, so lowering this makes larger existing archives unrestorable until it is raised again.', (int) $cap),
                 'Use aes-256-cbc for large backups — it is streamed.',
             );
         }
@@ -373,6 +374,30 @@ final class ConfigValidator
                 'integrity.signing.enabled',
                 'Manifest signing is enabled but nyoncode/laravel-backup-manager-pro is not installed; backups fail closed rather than being stored unsigned.',
                 'Install Pro (php artisan backup:upgrade), or set BACKUP_SIGNING=false.',
+            )];
+        }
+
+        if (! (bool) $config->get('backup-manager.integrity.signing.enabled', false)) {
+            return [];
+        }
+
+        $key = $config->get('backup-manager.integrity.signing.key') ?? $config->get('backup-manager.encryption.key');
+        $key = is_string($key) ? trim($key) : '';
+        $bytes = str_starts_with($key, 'base64:') ? strlen((string) base64_decode(substr($key, 7), true)) : strlen($key);
+
+        if ($key === '') {
+            return [ConfigFinding::error(
+                'integrity.signing.key',
+                'Signing is enabled but there is no key (neither BACKUP_SIGNING_KEY nor BACKUP_ENCRYPTION_KEY); an empty HMAC key can be forged by anyone.',
+                'Set BACKUP_SIGNING_KEY to 32 random bytes, e.g. "base64:" followed by base64_encode(random_bytes(32)).',
+            )];
+        }
+
+        if ($bytes < 32) {
+            return [ConfigFinding::warning(
+                'integrity.signing.key',
+                "The signing key is only {$bytes} bytes; a short HMAC key is easier to guess.",
+                'Use 32 random bytes for BACKUP_SIGNING_KEY. Backups already signed keep verifying only with the old key.',
             )];
         }
 
@@ -433,15 +458,15 @@ final class ConfigValidator
      */
     private function checkSchedule(Repository $config): array
     {
+        $findings = $this->checkProfileCadence($config);
+
         if (! (bool) $config->get('backup-manager.schedule.enabled', false)) {
             return [ConfigFinding::warning(
                 'schedule.enabled',
                 'Scheduling is off: backups only happen when something calls backup:run.',
                 'Set BACKUP_SCHEDULE=true and make sure the Laravel scheduler itself runs (cron: php artisan schedule:run).',
-            )];
+            ), ...$findings];
         }
-
-        $findings = [];
 
         foreach (['backup', 'cleanup'] as $operation) {
             $expression = $config->get("backup-manager.schedule.{$operation}");
@@ -456,12 +481,74 @@ final class ConfigValidator
                 continue;
             }
 
-            if (count(preg_split('/\s+/', trim($expression)) ?: []) !== 5) {
+            if (! $this->isCron($expression)) {
                 $findings[] = ConfigFinding::error("schedule.{$operation}", "[{$expression}] is not a five-field cron expression.");
             }
         }
 
+        $default = (string) $config->get('backup-manager.default', 'default');
+
+        foreach (array_keys((array) $config->get('backup-manager.profiles', [])) as $profile) {
+            $profile = (string) $profile;
+            $own = $config->get("backup-manager.profiles.{$profile}.schedule");
+
+            if ($profile !== $default && (! is_string($own) || trim($own) === '')) {
+                $findings[] = ConfigFinding::info(
+                    "profiles.{$profile}.schedule",
+                    "Profile [{$profile}] has no schedule of its own, so the scheduler never backs it up; only the default profile uses schedule.backup.",
+                    'Give it a cron expression, e.g. "0 3 * * *" for nightly or "0 2 1,15 * *" for twice a month.',
+                );
+            }
+        }
+
         return $findings;
+    }
+
+    /**
+     * Per-profile cadence settings: a profile's own cron expression and its
+     * own staleness threshold. Checked whether or not scheduling is on — a
+     * broken expression is broken the moment someone turns it on.
+     *
+     * @return list<ConfigFinding>
+     */
+    private function checkProfileCadence(Repository $config): array
+    {
+        $findings = [];
+
+        foreach (array_keys((array) $config->get('backup-manager.profiles', [])) as $profile) {
+            $profile = (string) $profile;
+            $own = $config->get("backup-manager.profiles.{$profile}.schedule");
+
+            if ($own !== null && (! is_string($own) || (trim($own) !== '' && ! $this->isCron($own)))) {
+                $findings[] = ConfigFinding::error(
+                    "profiles.{$profile}.schedule",
+                    sprintf('[%s] is not a five-field cron expression.', is_scalar($own) ? (string) $own : get_debug_type($own)),
+                    'Use e.g. "0 2 * * *" (nightly), "0 2 * * 0" (weekly) or "0 2 1,15 * *" (twice a month).',
+                );
+            }
+
+            $maxAge = $config->get("backup-manager.profiles.{$profile}.monitoring.max_backup_age_hours");
+
+            if ($maxAge !== null && (! is_numeric($maxAge) || (float) $maxAge <= 0)) {
+                $findings[] = ConfigFinding::error(
+                    "profiles.{$profile}.monitoring.max_backup_age_hours",
+                    'The staleness threshold must be a positive number of hours.',
+                    'Use null to derive it from the profile\'s schedule.',
+                );
+            }
+        }
+
+        return $findings;
+    }
+
+    /** A five-field expression the scheduler's own cron parser accepts. */
+    private function isCron(string $expression): bool
+    {
+        if (count(preg_split('/\s+/', trim($expression)) ?: []) !== 5) {
+            return false;
+        }
+
+        return CronExpression::isValidExpression(trim($expression));
     }
 
     /**

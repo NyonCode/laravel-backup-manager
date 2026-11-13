@@ -57,6 +57,21 @@ final readonly class StoredBackup
     }
 
     /**
+     * Whether a file name is one this package writes for an archive:
+     * `{profile}-{Y-m-d-His}-{6 hex}.tar` plus an optional compression and
+     * `.enc` extension. Listings ignore everything else, so a stranger's file
+     * in the same directory — or a whole bucket when `path` is empty — is never
+     * counted, let alone deleted, as a backup.
+     */
+    public static function isArchiveName(string $name): bool
+    {
+        return preg_match(
+            '/^[A-Za-z0-9_-]*-\d{4}-\d{2}-\d{2}-\d{6}(?:-[0-9a-f]{6})?\.tar(?:\.(?:gz|bz2|zst))?(?:\.enc)?$/',
+            $name,
+        ) === 1;
+    }
+
+    /**
      * The manifest sidecar file name derived from an archive file name.
      */
     public static function manifestNameFor(string $archiveName): string

@@ -31,11 +31,11 @@ final class DiskBackupRepository implements BackupRepository
         $backups = [];
 
         foreach ($storage->files($directory) as $file) {
-            if (str_ends_with($file, '.manifest.json')) {
+            $name = basename($file);
+
+            if (str_ends_with($file, '.manifest.json') || ! StoredBackup::isArchiveName($name)) {
                 continue;
             }
-
-            $name = basename($file);
             $manifestPath = $directory.'/'.StoredBackup::manifestNameFor($name);
 
             $backups[] = new StoredBackup(

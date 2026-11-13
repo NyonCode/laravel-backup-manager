@@ -179,6 +179,18 @@ Leave `null` to auto-discover from `PATH`, or set absolute paths:
 ],
 ```
 
+## Restore
+
+```php
+'restore' => [
+    'confine_to_include_paths' => (bool) env('BACKUP_RESTORE_CONFINE', true),
+],
+```
+
+With the default, a restore whose files lie outside the profile's current
+`files.include` paths is refused. See
+[Where files are restored](07-restore.md#where-files-are-restored).
+
 ## Timeouts & workspace
 
 ```php

@@ -181,6 +181,19 @@ final class ConfigReference
                 description: 'Retention overrides for this profile, in the shape of the shared `retention` block. Null uses the shared policy.',
                 default: null,
             ),
+            new ConfigOption(
+                key: 'profiles.*.schedule',
+                type: 'string?',
+                description: 'Cron expression the scheduler backs this profile up on (e.g. `0 2 * * 0` weekly, `0 2 1,15 * *` twice a month). Null: the default profile uses `schedule.backup`, any other profile is not scheduled.',
+                default: null,
+            ),
+            new ConfigOption(
+                key: 'profiles.*.monitoring.max_backup_age_hours',
+                type: 'integer?',
+                description: 'Hours after which this profile\'s newest backup counts as stale. Null derives it from the profile\'s schedule (longest gap between runs plus grace), never below `monitoring.max_backup_age_hours`.',
+                default: null,
+                requiresPro: true,
+            ),
 
             // ---- Compression ---------------------------------------------
             new ConfigOption(
@@ -207,6 +220,7 @@ final class ConfigReference
                 env: 'BACKUP_ENCRYPTION',
                 allowed: ['none', 'aes-256-cbc', 'aes-256-gcm'],
                 default: 'none',
+                noDowngrade: true,
             ),
             new ConfigOption(
                 key: 'encryption.key',
@@ -214,6 +228,15 @@ final class ConfigReference
                 description: 'A 32-byte key, `base64:` prefixed like APP_KEY. Store it in .env and keep a copy somewhere else: without it a backup cannot be restored.',
                 env: 'BACKUP_ENCRYPTION_KEY',
                 secret: true,
+                setOnce: true,
+            ),
+            new ConfigOption(
+                key: 'encryption.allow_legacy_cbc',
+                type: 'boolean',
+                description: 'Decrypt pre-1.3, unauthenticated AES-256-CBC archives and snapshot blobs of an unsigned backup. Off: such a backup restores only when signed, or with `backup:restore --allow-legacy-cbc`.',
+                env: 'BACKUP_ALLOW_LEGACY_CBC',
+                default: false,
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'encryption.gcm_max_megabytes',
@@ -239,6 +262,7 @@ final class ConfigReference
                 env: 'BACKUP_SIGNING',
                 default: false,
                 requiresPro: true,
+                noDowngrade: true,
             ),
             new ConfigOption(
                 key: 'integrity.signing.key',
@@ -247,6 +271,8 @@ final class ConfigReference
                 env: 'BACKUP_SIGNING_KEY',
                 requiresPro: true,
                 secret: true,
+                setOnce: true,
+                fallsBackTo: 'encryption.key',
             ),
 
             // ---- Retention -----------------------------------------------
@@ -341,6 +367,32 @@ final class ConfigReference
                 env: 'BACKUP_QUEUE_RESTORE_TIMEOUT',
             ),
 
+            new ConfigOption(
+                key: 'retention.blob_grace_hours',
+                type: 'integer',
+                description: 'Snapshot pool sweep: unreferenced blobs younger than this are kept, so a snapshot still being written never loses a blob it is about to reference.',
+                default: 24,
+                requiresPro: true,
+            ),
+
+            new ConfigOption(
+                key: 'restore.confine_to_include_paths',
+                type: 'boolean',
+                description: 'Refuse a restore whose files lie outside the profile\'s current files.include paths (a tampered manifest, or an app that moved). Turn off deliberately to restore a trusted backup to its recorded paths.',
+                env: 'BACKUP_RESTORE_CONFINE',
+                default: true,
+                guarded: true,
+            ),
+
+            new ConfigOption(
+                key: 'restore.trust_unsigned_dumps',
+                type: 'boolean',
+                description: 'Restore an unsigned database dump even through a client that cannot switch its own commands off (MariaDB --sandbox, MySQL --commands, psql \\restrict). Only for dumps you trust.',
+                env: 'BACKUP_RESTORE_TRUST_UNSIGNED_DUMPS',
+                default: false,
+                guarded: true,
+            ),
+
             // ---- Schedule ------------------------------------------------
             new ConfigOption(
                 key: 'schedule.enabled',
@@ -352,7 +404,7 @@ final class ConfigReference
             new ConfigOption(
                 key: 'schedule.backup',
                 type: 'string?',
-                description: 'Cron expression for `backup:run`. Null schedules nothing.',
+                description: 'Cron expression for `backup:run` of the default profile (other profiles set `profiles.*.schedule`). Null schedules nothing.',
                 default: '0 2 * * *',
             ),
             new ConfigOption(
@@ -373,7 +425,7 @@ final class ConfigReference
             new ConfigOption(
                 key: 'monitoring.max_backup_age_hours',
                 type: 'integer',
-                description: 'A destination is unhealthy when its newest backup is older than this. Used by Pro health monitoring.',
+                description: 'A destination is unhealthy when its newest backup is older than this. The floor: a scheduled profile gets at least its longest gap between runs plus grace, and `profiles.*.monitoring.max_backup_age_hours` overrides it. Used by Pro health monitoring.',
                 default: 25,
                 requiresPro: true,
             ),
@@ -420,48 +472,56 @@ final class ConfigReference
                 type: 'string?',
                 description: 'Absolute path to mysqldump. Null auto-discovers it on PATH.',
                 env: 'BACKUP_MYSQLDUMP_PATH',
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'binaries.mysql',
                 type: 'string?',
                 description: 'Absolute path to the mysql client, used when restoring.',
                 env: 'BACKUP_MYSQL_PATH',
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'binaries.mariadb-dump',
                 type: 'string?',
                 description: 'Absolute path to mariadb-dump (MariaDB 11+ names its clients this way).',
                 env: 'BACKUP_MARIADB_DUMP_PATH',
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'binaries.mariadb',
                 type: 'string?',
                 description: 'Absolute path to the mariadb client, used when restoring.',
                 env: 'BACKUP_MARIADB_PATH',
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'binaries.pg_dump',
                 type: 'string?',
                 description: 'Absolute path to pg_dump.',
                 env: 'BACKUP_PGDUMP_PATH',
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'binaries.psql',
                 type: 'string?',
                 description: 'Absolute path to psql, used when restoring.',
                 env: 'BACKUP_PSQL_PATH',
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'binaries.gzip',
                 type: 'string?',
                 description: 'Absolute path to gzip.',
                 env: 'BACKUP_GZIP_PATH',
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'binaries.zstd',
                 type: 'string?',
                 description: 'Absolute path to zstd.',
                 env: 'BACKUP_ZSTD_PATH',
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'timeout.database',
@@ -479,6 +539,7 @@ final class ConfigReference
                 key: 'working_directory',
                 type: 'string',
                 description: 'Where archives are assembled before upload. Needs free space for the largest backup.',
+                guarded: true,
             ),
 
             // ---- MCP -----------------------------------------------------
@@ -488,6 +549,7 @@ final class ConfigReference
                 description: 'Whether `backup:mcp` will serve at all.',
                 env: 'BACKUP_MCP',
                 default: true,
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'mcp.allow_writes',
@@ -495,6 +557,7 @@ final class ConfigReference
                 description: 'Let an assistant edit .env and config/backup-manager.php through the MCP server.',
                 env: 'BACKUP_MCP_ALLOW_WRITES',
                 default: true,
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'mcp.allow_destructive',
@@ -502,12 +565,14 @@ final class ConfigReference
                 description: 'Let an assistant delete backups (retention pruning) through the MCP server. Off by default.',
                 env: 'BACKUP_MCP_ALLOW_DESTRUCTIVE',
                 default: false,
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'mcp.environments',
                 type: 'string[]',
                 description: 'Application environments the MCP server may run in. `["*"]` allows every environment.',
                 default: ['local'],
+                guarded: true,
             ),
 
             // ---- Pro -----------------------------------------------------
@@ -517,12 +582,14 @@ final class ConfigReference
                 description: 'Composer repository `backup:upgrade` installs the Pro package from.',
                 env: 'BACKUP_PRO_REPOSITORY',
                 default: 'https://nyoncode.cz/repo',
+                guarded: true,
             ),
             new ConfigOption(
                 key: 'pro.package',
                 type: 'string',
                 description: 'Package name of the Pro edition.',
                 default: 'nyoncode/laravel-backup-manager-pro',
+                guarded: true,
             ),
         ];
     }

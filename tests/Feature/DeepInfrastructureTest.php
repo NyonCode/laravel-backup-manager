@@ -59,7 +59,7 @@ describe('DiskBackupRepository', function (): void {
             ],
             'drivers' => ['compression' => 'gzip', 'encryption' => 'none', 'checksum' => 'sha256'],
             'databases' => [],
-            'archive' => ['size' => 10, 'checksum' => ['algorithm' => 'sha256', 'digest' => 'abc']],
+            'archive' => ['size' => 10, 'checksum' => ['algorithm' => 'sha256', 'digest' => str_repeat('a', 64)]],
             'files' => [],
             'config' => [],
         ]);

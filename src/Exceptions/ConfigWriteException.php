@@ -46,6 +46,36 @@ final class ConfigWriteException extends BackupManagerException
         return new self("Configuration key [{$key}] does not accept [{$value}]. Allowed: {$allowed}.");
     }
 
+    public static function guardedKey(string $key): self
+    {
+        return new self(
+            "[{$key}] cannot be changed through the assistant: it controls what the assistant may do, which programs run "
+            .'or where secrets go. Edit it by hand.'
+        );
+    }
+
+    public static function alreadySet(string $key): self
+    {
+        return new self(
+            "[{$key}] is already set and cannot be replaced through the assistant: a new key would leave every backup made with the old one unreadable. Rotate it by hand."
+        );
+    }
+
+    public static function downgrade(string $key): self
+    {
+        return new self(
+            "[{$key}] is in force and the assistant may not turn it off. Change it by hand if you really mean to."
+        );
+    }
+
+    public static function unsafeEnvValue(string $variable): self
+    {
+        return new self(
+            "The value for [{$variable}] contains characters that cannot be written to .env safely "
+            .'(a "$" together with a quote or line break, or a control character). Set it by hand.'
+        );
+    }
+
     public static function unknownEnvironmentVariable(string $variable): self
     {
         return new self("[{$variable}] is not a Backup Manager environment variable; refusing to write it.");

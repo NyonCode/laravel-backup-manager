@@ -12,7 +12,7 @@ PostgreSQL and SQLite work out of the box, and you can teach it new engines (see
 | MySQL | `mysql` | `mysqldump`, else `mariadb-dump` | `mysql`, else `mariadb` |
 | MariaDB | `mariadb` | `mariadb-dump`, else `mysqldump` | `mariadb`, else `mysql` |
 | PostgreSQL | `pgsql` | `pg_dump` | `psql` |
-| SQLite | `sqlite` | file copy | file copy |
+| SQLite | `sqlite` | `VACUUM INTO` (else file copy) | file swap |
 
 The driver is taken directly from your Laravel connection config, so no extra
 mapping is needed.
@@ -73,8 +73,17 @@ When in doubt, point the binaries at a version-matched client:
 
 ## How SQLite is handled
 
-SQLite databases are snapshotted with a byte-for-byte file copy, which preserves
-the schema, data and pragmas exactly. In-memory databases cannot be backed up.
+SQLite databases are backed up with `VACUUM INTO`: a single, consistent copy that
+includes committed pages still in the write-ahead log (WAL). It needs `pdo_sqlite`
+and SQLite 3.27 or newer.
+
+Without it, the dumper falls back to a plain file copy. That fallback is
+**refused** when the database has an un-checkpointed `-wal` file, because a copy
+would silently miss recent writes. In-memory databases cannot be backed up.
+
+Restore copies the file beside the target and swaps it in with an atomic rename.
+Any old `-wal` / `-shm` files are removed, so SQLite never replays a stale
+journal over the restored database.
 
 ## Binaries
 

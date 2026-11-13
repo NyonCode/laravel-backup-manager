@@ -51,6 +51,16 @@ final class CollectSourceFiles implements BackupStage
             checksum: $checksum,
             isSymlink: $file->isSymlink,
             symlinkTarget: $file->symlinkTarget,
+            // Restored as it was: a `.env` or a private key must not come back
+            // world-readable.
+            mode: $file->isSymlink ? null : self::mode($file->absolutePath),
         );
+    }
+
+    private static function mode(string $path): ?int
+    {
+        $perms = @fileperms($path);
+
+        return is_int($perms) ? $perms & 0777 : null;
     }
 }

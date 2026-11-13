@@ -21,7 +21,7 @@ use Throwable;
 final class BackupUpgradeCommand extends Command
 {
     protected $signature = 'backup:upgrade
-        {token? : Your Pro licence token}
+        {token? : Your Pro licence token (omit it to be prompted, or set BACKUP_PRO_TOKEN)}
         {--username= : Auth username for the Pro repository (default: token)}
         {--repository= : Override the Pro Composer repository URL}
         {--package= : Override the Pro package name}
@@ -38,6 +38,14 @@ final class BackupUpgradeCommand extends Command
         }
 
         $provided = $this->argument('token');
+
+        if ($provided !== null) {
+            // Too late to take it back, but worth knowing: an argument is in the
+            // shell history and visible to other local users in `ps`.
+            $this->components->warn('The token was passed as an argument, so it is now in your shell history. Next time run the command without it (you will be prompted) or set BACKUP_PRO_TOKEN.');
+        } elseif (is_string(getenv('BACKUP_PRO_TOKEN')) && getenv('BACKUP_PRO_TOKEN') !== '') {
+            $provided = (string) getenv('BACKUP_PRO_TOKEN');
+        }
 
         if ($provided === null) {
             $prompt = $this->secret('Enter your Pro licence token');
@@ -56,6 +64,13 @@ final class BackupUpgradeCommand extends Command
         $package = $this->stringOption('package') ?: (string) config('backup-manager.pro.package', 'nyoncode/laravel-backup-manager-pro');
         $username = $this->stringOption('username', 'token');
         $host = (string) (parse_url($repository, PHP_URL_HOST) ?: $repository);
+
+        // The licence token is sent to this host as HTTP basic credentials.
+        if (parse_url($repository, PHP_URL_SCHEME) !== 'https' && ! in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+            $this->components->error("Refusing to send the licence token over plain HTTP to [{$repository}]. Use an https:// repository URL.");
+
+            return self::INVALID;
+        }
 
         // Configure the private repo + credentials, then pull the package. The
         // repository is keyed `nyoncode` so one entry (and one licence key) serves

@@ -18,6 +18,16 @@ final readonly class ConfigOption
      * @param  string  $type  `string`, `integer`, `boolean`, `string[]`, `array`; a trailing `?` allows null.
      * @param  list<string>  $allowed  Permitted values, when the key is an enumeration.
      * @param  bool  $secret  A credential: never echoed back through the protocol.
+     * @param  bool  $guarded  Never written through the MCP server: the key either
+     *                         widens what the assistant itself may do (`mcp.*`), names a
+     *                         program the package executes (`binaries.*`), decides where
+     *                         the licence token is sent (`pro.*`) or where plaintext dumps
+     *                         are staged (`working_directory`). A person edits those.
+     * @param  bool  $setOnce  Writable through MCP only while unset: an assistant may
+     *                         generate the first encryption or signing key, never replace
+     *                         one — that would also strand every backup made with it.
+     * @param  bool  $noDowngrade  Through MCP this may be turned up, never off: encryption
+     *                             to `none`, signing to false.
      */
     public function __construct(
         public string $key,
@@ -28,6 +38,11 @@ final readonly class ConfigOption
         public mixed $default = null,
         public bool $requiresPro = false,
         public bool $secret = false,
+        public bool $guarded = false,
+        public bool $setOnce = false,
+        public bool $noDowngrade = false,
+        /** The key whose value applies while this one is unset (signing falls back to the encryption key). */
+        public ?string $fallsBackTo = null,
     ) {}
 
     /**
@@ -86,6 +101,9 @@ final readonly class ConfigOption
             'default' => $this->secret ? null : $this->default,
             'requires_pro' => $this->requiresPro ?: null,
             'secret' => $this->secret ?: null,
+            'guarded' => $this->guarded ?: null,
+            'set_once' => $this->setOnce ?: null,
+            'no_downgrade' => $this->noDowngrade ?: null,
         ], static fn (mixed $value): bool => $value !== null);
     }
 }

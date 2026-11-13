@@ -6,6 +6,7 @@ namespace Nyoncode\BackupManager\Support;
 
 use Nyoncode\BackupManager\DTOs\DatabaseTarget;
 use Nyoncode\BackupManager\DTOs\RestoreOptions;
+use Nyoncode\BackupManager\Exceptions\RestoreException;
 use Nyoncode\BackupManager\Managers\DatabaseManager;
 use Nyoncode\BackupManager\ValueObjects\Manifest;
 use Psr\Log\LoggerInterface;
@@ -21,6 +22,9 @@ use Throwable;
  */
 final class RestoreGuard
 {
+    /** @var list<string> Failures of the rollback in progress. */
+    private array $failures = [];
+
     public function __construct(
         private readonly DatabaseManager $databases,
         private readonly LoggerInterface $logger,
@@ -57,8 +61,17 @@ final class RestoreGuard
     /**
      * Reinstate the captured state after a failed restore.
      */
-    public function rollback(RestorePoint $point): void
+    /**
+     * Put everything back. Every step is attempted even when one fails; the
+     * failures are returned, so the caller never reports a rollback as complete
+     * when part of it was not.
+     *
+     * @return list<string> What could not be put back.
+     */
+    public function rollback(RestorePoint $point): array
     {
+        $this->failures = [];
+
         foreach ($point->databases as $snapshot) {
             $this->safely(fn () => $this->databases
                 ->restorer($snapshot['target']->driver)
@@ -66,14 +79,35 @@ final class RestoreGuard
         }
 
         foreach ($point->files as $absolute => $copy) {
-            $this->safely(function () use ($absolute, $copy): void {
+            $mode = $point->modes[$absolute] ?? null;
+
+            $this->safely(function () use ($absolute, $copy, $mode): void {
                 $directory = dirname($absolute);
 
                 if (! is_dir($directory)) {
                     mkdir($directory, 0755, true);
                 }
 
-                copy($copy, $absolute);
+                // Beside the target, then renamed over it: the restored file may
+                // be read-only (its backed-up mode), which a copy() onto it
+                // would fail on — leaving the restored content in place while
+                // the restore reports itself rolled back.
+                $temp = $absolute.'.bm-rollback-tmp';
+
+                if (! @copy($copy, $temp)) {
+                    throw RestoreException::failed("Rollback could not put back [{$absolute}].");
+                }
+
+                // Put back the access it had, not whatever copy() left.
+                if ($mode !== null) {
+                    @chmod($temp, $mode);
+                }
+
+                if (! @rename($temp, $absolute)) {
+                    @unlink($temp);
+
+                    throw RestoreException::failed("Rollback could not put back [{$absolute}].");
+                }
             });
         }
 
@@ -84,6 +118,26 @@ final class RestoreGuard
                 }
             });
         }
+
+        return $this->failures;
+    }
+
+    /**
+     * Whether a dump failed because the database is simply not there yet —
+     * MySQL/MariaDB error 1049, PostgreSQL's "does not exist", or an SQLite
+     * file that is missing or in-memory.
+     */
+    private static function isMissingDatabase(Throwable $exception): bool
+    {
+        // Only the dump error itself — the client's stderr — is read. The
+        // wrapped process exception also carries the full command line
+        // (`--port=1049`, `--host=db-1049`, the database name), and a pattern
+        // that matched there would mistake a timeout or a full disk for "no
+        // database yet" and drop the safety net.
+        return preg_match(
+            '/Unknown database \'|Got error: 1049\b|ERROR 1049\b|database "[^"]*" does not exist|does not exist or is in-memory/',
+            $exception->getMessage(),
+        ) === 1;
     }
 
     /**
@@ -104,15 +158,27 @@ final class RestoreGuard
 
             $path = $rollbackDir.'/db-'.$artifact->connection.'.'.$target->driver->dumpExtension();
 
-            // If the current database can't be dumped (e.g. it does not exist
-            // yet), there is nothing to roll back to — skip it.
+            // A database that does not exist yet has nothing to roll back to,
+            // so it is skipped. Any other failure — a timeout, a full disk, a
+            // missing client — aborts the restore before it touches anything:
+            // carrying on would overwrite the live database with no way back,
+            // which is the one outcome this guard exists to prevent.
             try {
                 $this->databases->dumper($target->driver)->dump($target, $path);
                 $point->databases[$artifact->connection] = ['path' => $path, 'target' => $target];
+
+                // A rollback replays this dump through the same restorer, which
+                // inspects it. Inspect it now, so a dump the inspector would
+                // refuse stops the restore here — before anything changes —
+                // rather than halfway through putting things back.
+                SqlDumpInspector::assertSafe($target->driver, $path);
             } catch (Throwable $exception) {
-                $this->logger->warning('[backup-manager] Could not snapshot database for rollback', [
+                if (! self::isMissingDatabase($exception)) {
+                    throw RestoreException::rollbackUnavailable($artifact->connection, $exception);
+                }
+
+                $this->logger->info('[backup-manager] Database does not exist yet; nothing to snapshot for rollback', [
                     'connection' => $artifact->connection,
-                    'error' => $exception->getMessage(),
                 ]);
             }
         }
@@ -131,7 +197,9 @@ final class RestoreGuard
                 continue;
             }
 
-            $absolute = ArchivePath::toAbsolute($file->path);
+            // Normalised exactly as RestoreManager does, so the rollback copy is
+            // taken of the very file the restore is about to overwrite.
+            $absolute = SafePath::lexical(ArchivePath::toAbsolute($file->path));
 
             if ($options->isSelective() && ! $this->matchesSelection($absolute, $options->onlyPaths)) {
                 continue;
@@ -145,13 +213,18 @@ final class RestoreGuard
 
             $copy = $filesDir.'/'.md5($absolute);
 
-            if (! is_dir($filesDir)) {
-                mkdir($filesDir, 0755, true);
+            if (! is_dir($filesDir) && ! @mkdir($filesDir, 0700, true) && ! is_dir($filesDir)) {
+                throw RestoreException::rollbackUnavailable($absolute);
             }
 
-            if (copy($absolute, $copy)) {
-                $point->files[$absolute] = $copy;
+            // A file that cannot be copied aside cannot be put back either.
+            if (! @copy($absolute, $copy)) {
+                throw RestoreException::rollbackUnavailable($absolute);
             }
+
+            $point->files[$absolute] = $copy;
+            $perms = @fileperms($absolute);
+            $point->modes[$absolute] = is_int($perms) ? $perms & 0777 : null;
         }
     }
 
@@ -176,6 +249,7 @@ final class RestoreGuard
         try {
             $action();
         } catch (Throwable $exception) {
+            $this->failures[] = $exception->getMessage();
             $this->logger->error('[backup-manager] Rollback step failed', ['error' => $exception->getMessage()]);
         }
     }

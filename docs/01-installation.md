@@ -22,7 +22,7 @@ need the ones for the databases you actually use:
 |--------|---------------|
 | MySQL / MariaDB | `mysqldump`, `mysql` (restore) |
 | PostgreSQL | `pg_dump`, `psql` (restore) |
-| SQLite | none (file copy) |
+| SQLite | none (`pdo_sqlite` for a WAL-safe `VACUUM INTO`) |
 
 ## Install
 

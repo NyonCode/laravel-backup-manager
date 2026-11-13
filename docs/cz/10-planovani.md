@@ -28,6 +28,37 @@ Nastavte kterýkoli výraz na `null`, aby se daný příkaz neregistroval. Ujist
 Chcete si to zapojit sami? Ponechte `schedule.enabled = false` a přidejte příkazy
 do `routes/console.php` / scheduleru vaší aplikace jako obvykle.
 
+### Plány podle profilů
+
+Profilu dáte vlastní rytmus přes `schedule`:
+
+```php
+'profiles' => [
+    'default' => ['type' => 'full'],                                  // použije schedule.backup
+    'reports' => ['type' => 'database', 'schedule' => '0 3 * * 0'],   // týdně
+    'archive' => ['type' => 'files'],                                 // neplánuje se
+],
+```
+
+- **Výchozí profil** bez vlastního `schedule` použije sdílené `schedule.backup`.
+- **Jakýkoli jiný profil** bez `schedule` se **neplánuje** — profil určený pro
+  ruční spouštění nezačne zálohovat jen proto, že jste zapnuli scheduler.
+
+Scheduler registruje jeden příkaz na každý naplánovaný profil:
+
+```text
+php artisan backup:run                      # výchozí profil, jako dřív
+php artisan backup:run --profile=reports
+php artisan backup:clean --profile=reports  # podle sdíleného schedule.cleanup
+```
+
+Retence (`schedule.cleanup`) a s Pro i `backup:monitor` (`schedule.monitor`) běží
+na sdíleném rytmu pro výchozí profil a pro každý naplánovaný profil.
+
+Validátor konfigurace (`ConfigValidator`, používá ho i MCP server a report
+konfigurace v dashboardu) hlásí **informaci** u jiného než výchozího profilu bez
+plánu a **chybu** u `schedule`, který není platný pětipolový cron výraz.
+
 ## Fronty
 
 Dlouho běžící zálohy lze poslat do fronty:
@@ -78,14 +109,57 @@ nikdy nekoliduje s dalším ani s retencí/monitoringem.
 - stáří nejnovější zálohy.
 
 Cíl je **nezdravý**, když nemá žádné zálohy, nebo je jeho nejnovější záloha starší
-než:
+než práh zastaralosti profilu:
 
 ```php
-'monitoring' => ['max_backup_age_hours' => 25],
+'monitoring' => ['max_backup_age_hours' => 25],   // sdílená spodní hranice
 ```
 
 Příkaz končí nenulovým kódem, když je jakýkoli cíl nezdravý, takže slouží i jako
 CI/uptime kontrola.
+
+### Práh podle rytmu záloh
+
+Pevných 25 hodin by týdenní profil hlásilo jako zastaralý každý den. Práh proto
+sleduje plán profilu:
+
+1. Je-li nastaveno `profiles.*.monitoring.max_backup_age_hours`, platí ono.
+2. Jinak je to větší z hodnot: sdílené `monitoring.max_backup_age_hours` a
+   **nejdelší mezera mezi dvěma běhy cronu plus rezerva**.
+
+Rezerva je 10 % intervalu, nejméně 1 hodina a nejvýše 24 hodin. Sdílená hodnota
+je spodní hranice — nikdy se nesnižuje. Počítá se *nejdelší* mezera: `0 2 1,15 * *`
+má mezi 15. a 1. dalšího 31denního měsíce mezeru 17 dní a práh ji pokrývá.
+
+Příklad — profil zálohovaný zhruba jednou za dva týdny:
+
+```php
+'profiles' => [
+    'archive' => [
+        'type' => 'full',
+        'schedule' => '0 2 */14 * *',   // běží 1., 15. a 29.
+    ],
+],
+```
+
+> Cron neumí vyjádřit skutečný 14denní interval. `*/14` v poli dne v měsíci
+> znamená dny 1, 15 a 29 každého měsíce a pak začíná znovu — běhy jsou tedy po
+> 14 dnech, na konci měsíce s kratší mezerou.
+
+Nejdelší mezera je 14 dní (336 hodin); rezerva je 10 % z toho, tedy 33,6 hodiny,
+zastropovaná na 24. Profil je v pořádku, dokud je jeho nejnovější záloha mladší
+než zhruba 14 dní plus 24 hodin (360 hodin), potom je označen. Sdílených 25 hodin
+je jen spodní hranice, takže se neuplatní. Hodnotu si můžete zafixovat:
+
+```php
+'archive' => [
+    'schedule' => '0 2 */14 * *',
+    'monitoring' => ['max_backup_age_hours' => 400],
+],
+```
+
+Profil bez plánu použije jen sdílenou hodnotu. Monitoring běží pro výchozí profil
+a každý naplánovaný profil (`backup:monitor --profile=X`).
 
 ## Události
 

@@ -37,6 +37,15 @@ final class SafePath
     }
 
     /**
+     * A path with its '.' and '..' segments collapsed, without touching the
+     * filesystem — what a prefix comparison has to be made against.
+     */
+    public static function lexical(string $path): string
+    {
+        return self::normalize($path);
+    }
+
+    /**
      * Lexically collapse '.' and '..' segments without touching the filesystem.
      */
     private static function normalize(string $path): string

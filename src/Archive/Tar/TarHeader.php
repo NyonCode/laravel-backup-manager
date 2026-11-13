@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nyoncode\BackupManager\Archive\Tar;
 
+use Nyoncode\BackupManager\Exceptions\BackupManagerException;
+
 /**
  * Encodes and decodes 512-byte tar headers (USTAR + GNU extensions).
  *
@@ -101,6 +103,13 @@ final class TarHeader
         if ((ord($field[0]) & 0x80) !== 0) {
             $size = 0;
             for ($i = 1; $i < strlen($field); $i++) {
+                // A crafted header can encode more than 63 bits; shifting on
+                // would wrap to a negative or tiny size and desynchronise the
+                // reader. No real entry is that large.
+                if ($size > (PHP_INT_MAX >> 8)) {
+                    throw new BackupManagerException('Archive entry size overflows; the archive is corrupt or crafted.');
+                }
+
                 $size = ($size << 8) | ord($field[$i]);
             }
 

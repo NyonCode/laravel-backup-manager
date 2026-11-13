@@ -44,6 +44,9 @@ Applied on top of the chosen strategy:
   the oldest kept backups are dropped until it fits (`null` disables).
   **(Pro** — the free core does not enforce the size cap.)
 
+Neither cap can empty a destination: the newest backup is always kept, even when
+`max_age_days` or the storage cap would otherwise remove everything.
+
 ## Per-profile overrides
 
 A profile can override retention:

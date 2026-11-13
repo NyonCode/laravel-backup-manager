@@ -44,6 +44,9 @@ Aplikují se nad zvolenou strategií:
   velikost, zahazují se nejstarší ponechané zálohy, dokud se nevejde (`null`
   vypíná). **(Pro** — free jádro strop velikosti nevynucuje.)
 
+Žádný z limitů nemůže cíl vyprázdnit: nejnovější záloha se ponechá vždy, i když
+by `max_age_days` nebo strop úložiště jinak odstranily všechno.
+
 ## Přepsání per profil
 
 Profil může přepsat retenci:

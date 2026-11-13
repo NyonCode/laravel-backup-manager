@@ -95,6 +95,23 @@ deduplication is fully preserved and the bytes at rest are protected.
 > repository password. Changing them leaves earlier blobs unreadable by later
 > snapshots that expect the new setting.
 
+Since 1.3 the pool enforces this. It is **pinned** to its compression,
+encryption and key fingerprint (an HMAC of the key, never the key) in
+`{path}/.snapshot-pool.json`, and a snapshot with different settings is refused
+with a `SnapshotPoolException` before anything is written. To change the
+encoding or rotate the key, point the profile at a new `path`:
+
+```php
+'hourly' => [
+    'mode' => 'incremental',
+    'path' => 'backups-v2',   // a fresh pool, encoded with the new settings
+],
+```
+
+A pool from before 1.3 is adopted from its newest manifest. The key of an
+adopted encrypted pool cannot be checked after the fact, so the current key is
+recorded.
+
 ## Retention & garbage collection
 
 `backup:clean` prunes snapshots by the same policy as archives (GFS / simple +
@@ -119,6 +136,23 @@ if any surviving manifest cannot be read, no blob is deleted. See
 
 > Run `backup:clean` when backups are **not** running. Like all mark-and-sweep
 > collectors, it assumes a stable set of snapshots for the duration of the sweep.
+
+Two safeguards cover the overlap you cannot always avoid:
+
+- **A lock per pool.** Writing a snapshot and sweeping the pool each hold a cache
+  lock for the disk and `path`, so they never run at the same time. The lock
+  spans processes only on a shared cache store such as `redis` or `database`;
+  on a store that cannot lock, they run unguarded. A run waits up to 10 minutes,
+  then fails with "in use" and changes nothing.
+- **A grace period.** The sweep keeps unreferenced blobs younger than
+  `retention.blob_grace_hours` (default 24), so a snapshot still being written
+  never loses a blob it is about to reference.
+
+```php
+'retention' => [
+    'blob_grace_hours' => 24,
+],
+```
 
 ## Verify & monitor
 

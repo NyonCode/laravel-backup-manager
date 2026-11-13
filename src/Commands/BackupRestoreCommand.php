@@ -28,6 +28,9 @@ final class BackupRestoreCommand extends Command
         {--only=* : Restore only files under these absolute path prefixes}
         {--no-verify : Skip archive integrity verification}
         {--unsafe : Skip the pre-restore snapshot / rollback safety net}
+        {--allow-outside : Restore files and links to their recorded paths even outside the current include paths of the profile}
+        {--trust-unsigned-dump : Restore an unsigned database dump even through a client that cannot switch its own commands off}
+        {--allow-legacy-cbc : Decrypt a pre-1.3, unauthenticated AES-256-CBC archive or snapshot without a verified signature}
         {--force : Do not ask for confirmation}';
 
     protected $description = 'Restore a backup';
@@ -51,10 +54,27 @@ final class BackupRestoreCommand extends Command
             return self::SUCCESS;
         }
 
+        // A deliberate, one-off override for a trusted backup whose paths have
+        // moved — scoped to this command, never written to configuration.
+        if ($this->option('allow-outside')) {
+            config()->set('backup-manager.restore.confine_to_include_paths', false);
+            $this->components->warn('Restoring to the recorded paths, including any outside the profile\'s include paths.');
+        }
+
+        if ($this->option('allow-legacy-cbc')) {
+            config()->set('backup-manager.encryption.allow_legacy_cbc', true);
+            $this->components->warn('Accepting the unauthenticated pre-1.3 CBC format for this restore.');
+        }
+
+        if ($this->option('trust-unsigned-dump')) {
+            config()->set('backup-manager.restore.trust_unsigned_dumps', true);
+            $this->components->warn('Trusting the database dump: its client commands will not be blocked.');
+        }
+
         $this->components->info("Restoring {$backup->name}…");
 
         try {
-            $result = $restore->restore($backup, $this->restoreOptions());
+            $result = $restore->restore($backup, $this->restoreOptions(), $definition->profile);
         } catch (Throwable $exception) {
             $this->components->error($exception->getMessage());
 
@@ -64,6 +84,10 @@ final class BackupRestoreCommand extends Command
         $this->newLine();
         $this->components->twoColumnDetail('Databases restored', implode(', ', $result->restoredDatabases) ?: '—');
         $this->components->twoColumnDetail('Files restored', (string) $result->restoredFileCount);
+
+        foreach ($result->skippedLinks as $link) {
+            $this->components->warn("Symbolic link not recreated (target outside the profile's include paths): {$link}");
+        }
         $this->components->info('Restore completed.');
 
         return self::SUCCESS;

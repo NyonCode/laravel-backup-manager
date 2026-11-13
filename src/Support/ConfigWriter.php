@@ -164,8 +164,41 @@ final class ConfigWriter
         return str_contains((string) $this->file->sourceOf($path), 'env(');
     }
 
+    /** Whether a security setting is in force: a cipher other than `none`, or true. */
+    private static function isOn(mixed $value): bool
+    {
+        if (is_string($value)) {
+            return ! in_array(strtolower(trim($value)), ['', 'none', 'false', '0', 'off'], true);
+        }
+
+        return (bool) $value;
+    }
+
     private function assertAcceptable(ConfigOption $option, string $path, mixed $value): void
     {
+        // Checked before the value, and never skipped: `force` overrides the
+        // validator's verdict on the result, not who may change what.
+        if ($option->guarded) {
+            throw ConfigWriteException::guardedKey($path);
+        }
+
+        $current = config('backup-manager.'.$path);
+
+        // "Unset" means no key is in effect — a key that falls back to another
+        // is already in use when that one is set, and setting it would swap
+        // the key backups are signed with.
+        $effective = (is_string($current) && trim($current) !== '') || $option->fallsBackTo === null
+            ? $current
+            : config('backup-manager.'.$option->fallsBackTo);
+
+        if ($option->setOnce && is_string($effective) && trim($effective) !== '' && $value !== $effective) {
+            throw ConfigWriteException::alreadySet($path);
+        }
+
+        if ($option->noDowngrade && self::isOn($current) && ! self::isOn($value)) {
+            throw ConfigWriteException::downgrade($path);
+        }
+
         if ($option->accepts($value)) {
             return;
         }

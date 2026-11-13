@@ -178,6 +178,18 @@ Ponechte `null` pro automatické vyhledání v `PATH`, nebo zadejte absolutní c
 ],
 ```
 
+## Obnova
+
+```php
+'restore' => [
+    'confine_to_include_paths' => (bool) env('BACKUP_RESTORE_CONFINE', true),
+],
+```
+
+Ve výchozím stavu se obnova, jejíž soubory leží mimo aktuální cesty
+`files.include` profilu, odmítne. Viz
+[Kam se soubory obnovují](07-obnova.md#kam-se-soubory-obnovují).
+
 ## Časové limity a pracovní adresář
 
 ```php

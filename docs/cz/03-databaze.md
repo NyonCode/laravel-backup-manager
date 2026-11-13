@@ -12,7 +12,7 @@ PostgreSQL a SQLite fungují rovnou, a další enginy můžete doplnit (viz
 | MySQL | `mysql` | `mysqldump`, jinak `mariadb-dump` | `mysql`, jinak `mariadb` |
 | MariaDB | `mariadb` | `mariadb-dump`, jinak `mysqldump` | `mariadb`, jinak `mysql` |
 | PostgreSQL | `pgsql` | `pg_dump` | `psql` |
-| SQLite | `sqlite` | kopie souboru | kopie souboru |
+| SQLite | `sqlite` | `VACUUM INTO` (jinak kopie souboru) | výměna souboru |
 
 Ovladač se přebírá přímo z konfigurace Laravel připojení, žádné další mapování
 není potřeba.
@@ -73,8 +73,17 @@ nejistoty nasměrujte binárky na verzově odpovídajícího klienta:
 
 ## Jak funguje SQLite
 
-U SQLite se snapshot pořizuje kopií souboru bajt po bajtu, což přesně zachová
-schéma, data i pragmy. In-memory databáze zálohovat nelze.
+SQLite se zálohuje pomocí `VACUUM INTO`: vznikne jediná konzistentní kopie, která
+obsahuje i potvrzené stránky, jež jsou ještě v write-ahead logu (WAL). Vyžaduje
+`pdo_sqlite` a SQLite 3.27 nebo novější.
+
+Bez toho se dumper vrátí k prosté kopii souboru. Tato záloha se **odmítne**, má-li
+databáze necheckpointovaný soubor `-wal`, protože by kopie tiše vynechala
+poslední zápisy. In-memory databáze zálohovat nelze.
+
+Obnova zkopíruje soubor vedle cíle a atomicky ho přejmenováním prohodí. Staré
+soubory `-wal` / `-shm` se odstraní, takže SQLite nikdy nepřehraje zastaralý
+žurnál přes obnovenou databázi.
 
 ## Binárky
 

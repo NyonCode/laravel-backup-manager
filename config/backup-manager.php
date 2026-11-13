@@ -98,6 +98,22 @@ return [
 
             // Retention overrides for this profile (see shared 'retention').
             'retention' => null,
+
+            // When the scheduler backs this profile up: a five-field cron
+            // expression, e.g. '0 2 * * *' (nightly), '0 2 * * 0' (weekly) or
+            // '0 2 1,15 * *' (twice a month). Null falls back to the shared
+            // 'schedule.backup' for the default profile; any other profile
+            // without one is never backed up by the scheduler.
+            'schedule' => null,
+
+            // Health monitoring (Pro). A destination is unhealthy when its
+            // newest backup is older than this many hours. Null derives the
+            // threshold from the schedule above (the longest gap between two
+            // runs plus a grace period), so a profile backed up every 14 days
+            // is not flagged on day two.
+            'monitoring' => [
+                'max_backup_age_hours' => null,
+            ],
         ],
 
     ],
@@ -144,6 +160,11 @@ return [
         // megabytes, failing with a clear error instead of exhausting memory.
         // Use aes-256-cbc (streamed) for larger backups. null disables the cap.
         'gcm_max_megabytes' => (int) env('BACKUP_GCM_MAX_MB', 1024),
+
+        // AES-256-CBC archives and snapshot blobs written before 1.3 carry no
+        // authentication tag. They are decrypted for a signed backup; for an
+        // unsigned one only with this (or `backup:restore --allow-legacy-cbc`).
+        'allow_legacy_cbc' => (bool) env('BACKUP_ALLOW_LEGACY_CBC', false),
     ],
 
     /*
@@ -203,6 +224,11 @@ return [
         'max_age_days' => 365,
         // Total-storage cap (Pro). null disables the limit.
         'max_storage_megabytes' => null,
+
+        // Snapshot pool sweep (Pro): an unreferenced blob is only deleted once
+        // it is older than this, so a snapshot still being written can never
+        // lose a blob it is about to reference.
+        'blob_grace_hours' => 24,
     ],
 
     /*
@@ -241,6 +267,7 @@ return [
 
     'schedule' => [
         'enabled' => (bool) env('BACKUP_SCHEDULE', false),
+        // The default profile's backups; other profiles set their own 'schedule'.
         'backup' => '0 2 * * *',   // nightly full backup at 02:00
         'cleanup' => '0 4 * * *',  // apply retention at 04:00
         'monitor' => '0 6 * * *',  // health report at 06:00
@@ -307,7 +334,9 @@ return [
 
     'monitoring' => [
         // Warn when the newest backup is older than this many hours. (Pro:
-        // used by health monitoring.)
+        // used by health monitoring.) This is the floor: a scheduled profile
+        // is given at least its longest gap between runs plus a grace period,
+        // and a profile's own 'monitoring.max_backup_age_hours' overrides both.
         'max_backup_age_hours' => 25,
 
         // Persist an operation history record to the database (Pro; requires the
@@ -382,5 +411,28 @@ return [
     */
 
     'working_directory' => storage_path('app/backup-manager/temp'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Restore
+    |--------------------------------------------------------------------------
+    |
+    | A restore writes files back to the absolute paths recorded in the
+    | manifest. With this on, it refuses — before changing anything — a backup
+    | holding files outside the profile's current `files.include` paths, which
+    | is what a tampered manifest aiming at ~/.ssh or /etc looks like. Turn it
+    | off deliberately to restore a trusted backup whose paths have changed.
+    |
+    */
+
+    'restore' => [
+        'confine_to_include_paths' => (bool) env('BACKUP_RESTORE_CONFINE', true),
+
+        // An unsigned database dump is restored only through a client that
+        // switches its own commands off (MariaDB --sandbox, MySQL --commands,
+        // psql \restrict). True restores it through any client — only for a
+        // dump you trust; `backup:restore --trust-unsigned-dump` does it once.
+        'trust_unsigned_dumps' => (bool) env('BACKUP_RESTORE_TRUST_UNSIGNED_DUMPS', false),
+    ],
 
 ];

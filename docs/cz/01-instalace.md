@@ -22,7 +22,7 @@ potřebujete jen ty pro databáze, které skutečně používáte:
 |---------|------------------|
 | MySQL / MariaDB | `mysqldump`, `mysql` (obnova) |
 | PostgreSQL | `pg_dump`, `psql` (obnova) |
-| SQLite | žádná (kopie souboru) |
+| SQLite | žádná (`pdo_sqlite` pro `VACUUM INTO`, bezpečné i ve WAL) |
 
 ## Instalace
 

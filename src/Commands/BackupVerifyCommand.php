@@ -52,7 +52,9 @@ final class BackupVerifyCommand extends Command
             'Signature',
             match ($result->signatureValid) {
                 true => '<fg=green>valid</>',
-                false => '<fg=red>INVALID</>',
+                false => $result->unsigned()
+                    ? '<fg=red>MISSING</> (signing is enabled; this backup carries no signature — taken before signing was turned on, or stripped)'
+                    : '<fg=red>INVALID</>',
                 null => '<fg=gray>not signed</>',
             },
         );

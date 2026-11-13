@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Nyoncode\BackupManager;
 
 use Illuminate\Console\Scheduling\Schedule;
-use Illuminate\Container\Container as CurrentContainer;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -35,9 +34,6 @@ use Nyoncode\BackupManager\Contracts\Notification\NotificationChannel;
 use Nyoncode\BackupManager\Contracts\Snapshot\SnapshotDriver;
 use Nyoncode\BackupManager\Contracts\Storage\BackupRepository;
 use Nyoncode\BackupManager\DTOs\RetentionPolicy;
-use Nyoncode\BackupManager\Events\BackupCompleted;
-use Nyoncode\BackupManager\Events\BackupFailed;
-use Nyoncode\BackupManager\Events\BackupStarted;
 use Nyoncode\BackupManager\Exceptions\IntegrityException;
 use Nyoncode\BackupManager\Listeners\LogsBackupActivity;
 use Nyoncode\BackupManager\Listeners\SendBackupNotifications;
@@ -67,6 +63,7 @@ use Nyoncode\BackupManager\Retention\SimpleStrategy;
 use Nyoncode\BackupManager\Services\BackupNotifier;
 use Nyoncode\BackupManager\Snapshot\NullSnapshotDriver;
 use Nyoncode\BackupManager\Storage\DiskBackupRepository;
+use Nyoncode\BackupManager\Support\BackupSchedule;
 use Nyoncode\BackupManager\Support\BinaryLocator;
 use Nyoncode\BackupManager\Support\ConfigReference;
 use Nyoncode\BackupManager\Support\ConfigValidator;
@@ -123,15 +120,9 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
             // Subscribe the activity/notification listeners and register the
             // schedule once the package has fully booted.
             ->bootedPackage(function (): void {
-                // Listened to by class and method, not subscribe()d: subscribing
-                // builds the listener on the spot, and with it the notifier and
-                // its channels — on every PHP-FPM request, for an event that
-                // rarely fires. Built when the event fires instead.
                 $events = $this->app->make(Dispatcher::class);
-                $events->listen(BackupStarted::class, [LogsBackupActivity::class, 'handleStarted']);
-                $events->listen(BackupCompleted::class, [LogsBackupActivity::class, 'handleCompleted']);
-                $events->listen(BackupFailed::class, [LogsBackupActivity::class, 'handleFailed']);
-                $events->listen(BackupFailed::class, [SendBackupNotifications::class, 'handleFailed']);
+                $events->subscribe(LogsBackupActivity::class);
+                $events->subscribe(SendBackupNotifications::class);
 
                 $this->registerSchedule();
             });
@@ -185,6 +176,10 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
         ));
 
         $this->app->singleton(ProfileResolver::class, fn ($app): ProfileResolver => new ProfileResolver(
+            $app->make(Repository::class),
+        ));
+
+        $this->app->singleton(BackupSchedule::class, fn ($app): BackupSchedule => new BackupSchedule(
             $app->make(Repository::class),
         ));
 
@@ -251,19 +246,12 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
         // the provider order.
         $this->app->tag(MailChannel::class, self::NOTIFICATION_CHANNELS);
 
-        // Config and channels are resolved on every notification, through the
-        // container current at that moment: under a long-lived worker (Octane)
-        // that is the running request's, so a channel reads the request's config
-        // and sends through its mailer. Under PHP-FPM it is the one application.
-        // Not a singleton: it holds nothing worth sharing, and a shared instance
-        // is one more object a worker keeps for its whole life.
-        $this->app->bind(BackupNotifier::class, fn (): BackupNotifier => new BackupNotifier(
-            config: static fn (): Repository => CurrentContainer::getInstance()->make(Repository::class),
-            channels: static function (): iterable {
-                /** @var iterable<NotificationChannel> */
-                return CurrentContainer::getInstance()->tagged(self::NOTIFICATION_CHANNELS);
-            },
-        ));
+        $this->app->singleton(BackupNotifier::class, function ($app): BackupNotifier {
+            /** @var iterable<NotificationChannel> $channels */
+            $channels = $app->tagged(self::NOTIFICATION_CHANNELS);
+
+            return new BackupNotifier($app->make(Repository::class), $channels);
+        });
     }
 
     private function registerManagers(): void
@@ -511,6 +499,20 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
         return (string) $config->get('backup-manager.working_directory', storage_path('app/backup-manager/temp'));
     }
 
+    /**
+     * Register `backup:run` and `backup:clean` with the Laravel scheduler, once
+     * per scheduled profile.
+     *
+     * {@see BackupSchedule} decides which profiles run and when: a profile's own
+     * `schedule` cron, or for the default profile the shared `schedule.backup`.
+     * Retention follows the same set on the shared `schedule.cleanup` cadence —
+     * a profile that is backed up automatically has its retention applied
+     * automatically, and one that is not is left to whoever runs it.
+     *
+     * The default profile is scheduled without `--profile`, exactly as it was
+     * before per-profile schedules existed, so an existing installation keeps
+     * the same scheduled command (and the same overlap mutex).
+     */
     private function registerSchedule(): void
     {
         $config = $this->app->make(Repository::class);
@@ -521,18 +523,40 @@ final class BackupManagerServiceProvider extends PackageServiceProvider implemen
 
         $this->app->booted(function () use ($config): void {
             $schedule = $this->app->make(Schedule::class);
+            $default = (string) $config->get('backup-manager.default', 'default');
+            $cleanup = $config->get('backup-manager.schedule.cleanup');
 
-            foreach ([
-                'backup:run' => $config->get('backup-manager.schedule.backup'),
-                'backup:clean' => $config->get('backup-manager.schedule.cleanup'),
-            ] as $command => $expression) {
-                if (is_string($expression) && $expression !== '') {
-                    // withoutOverlapping guards against a slow backup colliding
-                    // with the next scheduled run (or with retention/monitoring).
-                    $schedule->command($command)->cron($expression)->withoutOverlapping();
-                }
+            $scheduled = $this->app->make(BackupSchedule::class)->scheduledProfiles();
+
+            foreach ($scheduled as $profile => $expression) {
+                // withoutOverlapping guards against a slow backup colliding
+                // with the next scheduled run (or with retention/monitoring).
+                $schedule->command('backup:run', $this->profileParameters($profile, $default))
+                    ->cron($expression)
+                    ->withoutOverlapping();
+            }
+
+            if (! is_string($cleanup) || $cleanup === '') {
+                return;
+            }
+
+            // The default profile is cleaned even when nothing schedules its
+            // backups, as it always was: retention on a cadence of its own
+            // over backups someone runs by hand is a legitimate setup.
+            foreach (array_unique([$default, ...array_keys($scheduled)]) as $profile) {
+                $schedule->command('backup:clean', $this->profileParameters($profile, $default))
+                    ->cron($cleanup)
+                    ->withoutOverlapping();
             }
         });
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function profileParameters(string $profile, string $default): array
+    {
+        return $profile === $default ? [] : ['--profile' => $profile];
     }
 
     private function toInt(mixed $value): ?int

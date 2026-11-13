@@ -75,7 +75,7 @@ it('stamps the manifest schema version that carries the field', function (): voi
 
     app(BackupManager::class)->run('test');
 
-    expect(storedManifest()->schemaVersion)->toBe('1.2');
+    expect(storedManifest()->schemaVersion)->toBe(Manifest::SCHEMA_VERSION);
 });
 
 /**

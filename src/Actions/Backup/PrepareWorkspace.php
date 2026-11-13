@@ -22,7 +22,9 @@ final class PrepareWorkspace implements BackupStage
     {
         $workspace = rtrim($this->workingDirectory, '/')."/{$context->baseName}";
 
-        if (! is_dir($workspace) && ! mkdir($workspace, 0755, true) && ! is_dir($workspace)) {
+        // Owner-only: until it is compressed and encrypted, everything in here —
+        // database dumps above all — is plaintext.
+        if (! is_dir($workspace) && ! mkdir($workspace, 0700, true) && ! is_dir($workspace)) {
             throw new BackupManagerException("Unable to create working directory [{$workspace}].");
         }
 

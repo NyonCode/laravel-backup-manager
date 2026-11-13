@@ -18,12 +18,17 @@ final class CleanupWorkspace implements BackupStage
 {
     public function handle(BackupContext $context, Closure $next): BackupContext
     {
-        $this->delete($context->workspace);
+        self::remove($context->workspace);
 
         return $next($context);
     }
 
-    private function delete(string $directory): void
+    /**
+     * Delete a workspace and everything in it. Also called when a backup
+     * fails part-way — the pipeline never reaches this stage then, and the
+     * workspace holds plaintext database dumps.
+     */
+    public static function remove(string $directory): void
     {
         if ($directory === '' || ! is_dir($directory)) {
             return;

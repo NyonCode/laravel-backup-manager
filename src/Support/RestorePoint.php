@@ -34,4 +34,11 @@ final class RestorePoint
      * @var list<string>
      */
     public array $createdFiles = [];
+
+    /**
+     * Permission bits of each saved file, so a rollback restores access too.
+     *
+     * @var array<string, int|null>
+     */
+    public array $modes = [];
 }

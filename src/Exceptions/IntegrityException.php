@@ -16,6 +16,11 @@ final class IntegrityException extends BackupManagerException
         );
     }
 
+    public static function malformedDigest(): self
+    {
+        return new self('A checksum in the manifest is not a hexadecimal SHA-256/512 digest; the manifest is refused as tampered or corrupt.');
+    }
+
     public static function signatureMismatch(): self
     {
         return new self('Signature verification failed. The backup could not be authenticated.');

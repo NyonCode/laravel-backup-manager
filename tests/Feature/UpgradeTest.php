@@ -31,3 +31,21 @@ it('rejects an empty token', function (): void {
     $this->artisan('backup:upgrade', ['token' => '', '--dry-run' => true])
         ->assertExitCode(2); // Command::INVALID
 });
+
+it('refuses to send the licence token over plain http', function (): void {
+    $this->artisan('backup:upgrade', [
+        'token' => 'SECRET-TOKEN-1234',
+        '--repository' => 'http://packages.example.test',
+        '--dry-run' => true,
+    ])
+        ->expectsOutputToContain('Refusing to send the licence token over plain HTTP')
+        ->assertExitCode(2);
+});
+
+it('warns that a token passed as an argument is in the shell history', function (): void {
+    $this->artisan('backup:upgrade', [
+        'token' => 'SECRET-TOKEN-1234',
+        '--repository' => 'https://packages.example.test',
+        '--dry-run' => true,
+    ])->expectsOutputToContain('shell history')->assertSuccessful();
+});

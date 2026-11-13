@@ -45,13 +45,23 @@ final readonly class Checksum
     /**
      * Reconstruct a checksum from its stored representation.
      *
-     * @param  array{algorithm: string, digest: string}  $data
+     * @param  array<string, mixed>  $data
      */
     public static function fromArray(array $data): self
     {
+        $digest = $data['digest'] ?? null;
+        $algorithm = $data['algorithm'] ?? null;
+
+        // A digest read from a manifest also addresses a blob in the pool
+        // (`blobs/{alg}/{ab}/{digest}`), so anything but hex — `../../x` — is
+        // refused here rather than trusted as a path segment downstream.
+        if (! is_string($digest) || ! is_string($algorithm) || preg_match('/^(?:[0-9a-fA-F]{64}|[0-9a-fA-F]{128})$/', $digest) !== 1) {
+            throw IntegrityException::malformedDigest();
+        }
+
         return new self(
-            ChecksumAlgorithm::from($data['algorithm']),
-            $data['digest'],
+            ChecksumAlgorithm::from($algorithm),
+            $digest,
         );
     }
 

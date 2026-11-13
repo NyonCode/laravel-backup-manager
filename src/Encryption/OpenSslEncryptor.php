@@ -14,11 +14,19 @@ use Nyoncode\BackupManager\Support\EncryptionKey;
  *
  * The archive is written with a small self-describing header:
  *
- *   magic "BME1" (4B) | algorithm (1B) | IV | [GCM tag 16B] | ciphertext
+ *   magic "BME1" (4B) | algorithm (1B) | IV | [GCM tag 16B] | ciphertext | [HMAC 32B]
  *
- * CBC mode is streamed block-by-block so arbitrarily large archives encrypt
- * with flat memory. GCM mode is authenticated (AEAD): tampering is detected
- * on decrypt, at the cost of buffering the archive in memory.
+ * Algorithm ids: 1 = AES-256-CBC (legacy, unauthenticated, decrypt only),
+ * 2 = AES-256-GCM, 3 = AES-256-CBC with an HMAC-SHA256 tag (encrypt-then-MAC).
+ *
+ * CBC is streamed block-by-block so arbitrarily large archives encrypt with
+ * flat memory. Since 1.3 it is also authenticated: the HMAC covers the header,
+ * the IV and the ciphertext, sits at the end so encryption stays a single
+ * pass, and is checked in full *before* a byte is decrypted — a tampered
+ * archive is refused rather than decrypted into something plausible, and no
+ * padding error is ever reachable on unauthenticated input. The MAC key is
+ * derived from the configured key with HKDF, so there is nothing new to set.
+ * GCM is authenticated (AEAD) at the cost of buffering the archive in memory.
  */
 final class OpenSslEncryptor implements Encryptor
 {
@@ -26,10 +34,13 @@ final class OpenSslEncryptor implements Encryptor
 
     private const CHUNK = 1_048_576; // 1 MiB, a multiple of the 16-byte block size
 
-    private const ALGO_IDS = [
-        'aes-256-cbc' => 1,
-        'aes-256-gcm' => 2,
-    ];
+    private const ID_CBC_LEGACY = 1;
+
+    private const ID_GCM = 2;
+
+    private const ID_CBC_HMAC = 3;
+
+    private const MAC_LENGTH = 32;
 
     public function __construct(
         private readonly EncryptionAlgorithm $algorithm,
@@ -39,6 +50,13 @@ final class OpenSslEncryptor implements Encryptor
          * null disables the guard. CBC streams and is unaffected.
          */
         private readonly ?int $maxGcmBytes = null,
+        /**
+         * Whether the unauthenticated pre-1.3 CBC format (id 1) is accepted on
+         * decrypt. Off when the archive is known to be newer: stripping the tag
+         * and flipping the id byte must not turn an authenticated archive into
+         * one that is decrypted unchecked.
+         */
+        private readonly bool $allowLegacyCbc = true,
     ) {}
 
     public function encrypt(string $source, string $destination): void
@@ -58,11 +76,29 @@ final class OpenSslEncryptor implements Encryptor
             throw EncryptionException::cipherFailed('Unrecognised archive header; the file is not encrypted by this package.');
         }
 
-        $algorithm = $this->algorithmFromId(ord((string) fread($in, 1)));
+        $id = ord((string) fread($in, 1));
+        $algorithm = $this->algorithmFromId($id);
 
-        $algorithm === EncryptionAlgorithm::Aes256Gcm
-            ? $this->decryptGcm($in, $destination)
-            : $this->decryptCbc($in, $algorithm, $destination);
+        // The header must name the algorithm the manifest does: a header is
+        // part of the file an attacker can rewrite, the expected algorithm is
+        // not something they get to choose here.
+        if ($algorithm !== $this->algorithm) {
+            fclose($in);
+
+            throw EncryptionException::cipherFailed(sprintf(
+                'The archive header says [%s] but [%s] was expected; refusing to decrypt.',
+                $algorithm->value,
+                $this->algorithm->value,
+            ));
+        }
+
+        match ($id) {
+            self::ID_GCM => $this->decryptGcm($in, $destination),
+            self::ID_CBC_HMAC => $this->decryptCbcAuthenticated($in, $destination),
+            default => $this->allowLegacyCbc
+                ? $this->decryptCbcLegacy($in, $algorithm, $destination)
+                : $this->refuseLegacy($in),
+        };
     }
 
     private function encryptCbc(string $source, string $destination): void
@@ -71,7 +107,11 @@ final class OpenSslEncryptor implements Encryptor
         $in = $this->open($source, 'rb');
         $out = $this->open($destination, 'wb');
 
-        fwrite($out, self::MAGIC.chr(self::ALGO_IDS[$this->algorithm->cipher()]).$iv);
+        $header = self::MAGIC.chr(self::ID_CBC_HMAC).$iv;
+        $mac = hash_init('sha256', HASH_HMAC, $this->macKey());
+
+        fwrite($out, $header);
+        hash_update($mac, $header);
 
         $previous = $iv;
         $buffer = (string) fread($in, self::CHUNK);
@@ -82,7 +122,73 @@ final class OpenSslEncryptor implements Encryptor
         do {
             $next = (string) fread($in, self::CHUNK);
             $final = $next === '';
-            $previous = $this->writeCbcChunk($out, $buffer, $previous, $final);
+            $previous = $this->writeCbcChunk($out, $buffer, $previous, $final, $mac);
+            $buffer = $next;
+        } while (! $final);
+
+        fwrite($out, hash_final($mac, true));
+
+        fclose($in);
+        fclose($out);
+    }
+
+    /**
+     * Encrypt-then-MAC: verify the tag over everything before it, and only
+     * then decrypt. Two passes over the file, flat memory in both.
+     *
+     * @param  resource  $in
+     */
+    private function decryptCbcAuthenticated($in, string $destination): void
+    {
+        $size = (int) (fstat($in)['size'] ?? 0);
+        $ivLength = max(1, EncryptionAlgorithm::Aes256Cbc->ivLength());
+        $headerLength = strlen(self::MAGIC) + 1 + $ivLength;
+        $macOffset = $size - self::MAC_LENGTH;
+
+        if ($macOffset < $headerLength) {
+            fclose($in);
+
+            throw EncryptionException::authenticationFailed();
+        }
+
+        // Pass 1: the MAC, over header + IV + ciphertext.
+        rewind($in);
+        $mac = hash_init('sha256', HASH_HMAC, $this->macKey());
+        $remaining = $macOffset;
+
+        while ($remaining > 0) {
+            $chunk = (string) fread($in, min(self::CHUNK, $remaining));
+
+            if ($chunk === '') {
+                break;
+            }
+
+            hash_update($mac, $chunk);
+            $remaining -= strlen($chunk);
+        }
+
+        $expected = (string) fread($in, self::MAC_LENGTH);
+
+        if ($remaining !== 0 || ! hash_equals(hash_final($mac, true), $expected)) {
+            fclose($in);
+
+            throw EncryptionException::authenticationFailed();
+        }
+
+        // Pass 2: decrypt exactly the authenticated ciphertext.
+        fseek($in, strlen(self::MAGIC) + 1);
+        $iv = (string) fread($in, $ivLength);
+        $out = $this->open($destination, 'wb');
+        $remaining = $macOffset - $headerLength;
+        $previous = $iv;
+        $buffer = $this->readUpTo($in, $remaining);
+        $remaining -= strlen($buffer);
+
+        do {
+            $next = $this->readUpTo($in, $remaining);
+            $remaining -= strlen($next);
+            $final = $next === '';
+            $previous = $this->writeCbcPlainChunk($out, $buffer, EncryptionAlgorithm::Aes256Cbc, $previous, $final);
             $buffer = $next;
         } while (! $final);
 
@@ -93,8 +199,45 @@ final class OpenSslEncryptor implements Encryptor
     /**
      * @param  resource  $in
      */
-    private function decryptCbc($in, EncryptionAlgorithm $algorithm, string $destination): void
+    private function readUpTo($in, int $remaining): string
     {
+        return $remaining > 0 ? (string) fread($in, max(1, min(self::CHUNK, $remaining))) : '';
+    }
+
+    /**
+     * @param  resource  $in
+     */
+    private function refuseLegacy($in): never
+    {
+        fclose($in);
+
+        throw EncryptionException::cipherFailed(
+            'This archive is in the unauthenticated pre-1.3 CBC format, which cannot prove it was not modified. '
+            .'It is restored only from a signed backup, or with `backup:restore --allow-legacy-cbc` '
+            .'(BACKUP_ALLOW_LEGACY_CBC=true) if you trust it.'
+        );
+    }
+
+    /** The HMAC key: derived from the configured key, never the key itself. */
+    private function macKey(): string
+    {
+        return hash_hkdf('sha256', $this->key->bytes, 32, 'backup-manager:cbc-hmac-sha256:v1');
+    }
+
+    /**
+     * @param  resource  $in
+     */
+    private function decryptCbcLegacy($in, EncryptionAlgorithm $algorithm, string $destination): void
+    {
+        // Written before 1.3, with nothing to authenticate it by. Still
+        // restorable — refusing would strand every older encrypted backup —
+        // but only Pro manifest signing can tell such a file from a forgery.
+        try {
+            logger()->warning('[backup-manager] Decrypting an unauthenticated (pre-1.3) AES-256-CBC archive; enable manifest signing to detect tampering.');
+        } catch (\Throwable) {
+            // A warning is never a reason to fail a restore.
+        }
+
         $iv = (string) fread($in, max(1, $algorithm->ivLength()));
         $out = $this->open($destination, 'wb');
 
@@ -117,7 +260,7 @@ final class OpenSslEncryptor implements Encryptor
      *
      * @param  resource  $out
      */
-    private function writeCbcChunk($out, string $plaintext, string $iv, bool $final): string
+    private function writeCbcChunk($out, string $plaintext, string $iv, bool $final, \HashContext $mac): string
     {
         $options = OPENSSL_RAW_DATA | ($final ? 0 : OPENSSL_ZERO_PADDING);
 
@@ -128,6 +271,7 @@ final class OpenSslEncryptor implements Encryptor
         }
 
         fwrite($out, $ciphertext);
+        hash_update($mac, $ciphertext);
 
         return $final ? $iv : substr($ciphertext, -16);
     }
@@ -181,7 +325,7 @@ final class OpenSslEncryptor implements Encryptor
 
         file_put_contents(
             $destination,
-            self::MAGIC.chr(self::ALGO_IDS[$this->algorithm->cipher()]).$iv.$tag.$ciphertext,
+            self::MAGIC.chr(self::ID_GCM).$iv.$tag.$ciphertext,
         );
     }
 
@@ -190,6 +334,16 @@ final class OpenSslEncryptor implements Encryptor
      */
     private function decryptGcm($in, string $destination): void
     {
+        // GCM decrypts in memory, so the same cap that bounds encryption bounds
+        // this: a file planted on the destination must not exhaust memory.
+        $size = (int) (fstat($in)['size'] ?? 0);
+
+        if ($this->maxGcmBytes !== null && $size > $this->maxGcmBytes + 64) {
+            fclose($in);
+
+            throw EncryptionException::gcmArchiveTooLarge($size, $this->maxGcmBytes);
+        }
+
         $iv = (string) fread($in, max(1, EncryptionAlgorithm::Aes256Gcm->ivLength()));
         $tag = (string) fread($in, 16);
         $ciphertext = (string) stream_get_contents($in);
@@ -214,8 +368,8 @@ final class OpenSslEncryptor implements Encryptor
     private function algorithmFromId(int $id): EncryptionAlgorithm
     {
         return match ($id) {
-            1 => EncryptionAlgorithm::Aes256Cbc,
-            2 => EncryptionAlgorithm::Aes256Gcm,
+            self::ID_CBC_LEGACY, self::ID_CBC_HMAC => EncryptionAlgorithm::Aes256Cbc,
+            self::ID_GCM => EncryptionAlgorithm::Aes256Gcm,
             default => throw EncryptionException::cipherFailed("Unknown algorithm id [{$id}] in archive header."),
         };
     }

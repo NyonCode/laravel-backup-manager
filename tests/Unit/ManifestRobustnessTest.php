@@ -28,7 +28,7 @@ it('preserves an unknown-but-present schema version on round-trip', function ():
         ],
         'drivers' => ['compression' => 'none', 'encryption' => 'none', 'checksum' => 'sha256'],
         'databases' => [],
-        'archive' => ['size' => 0, 'checksum' => ['algorithm' => 'sha256', 'digest' => 'abc']],
+        'archive' => ['size' => 0, 'checksum' => ['algorithm' => 'sha256', 'digest' => str_repeat('a', 64)]],
         'files' => [],
         'config' => [],
     ]);
